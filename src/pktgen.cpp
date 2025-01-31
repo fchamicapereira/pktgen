@@ -521,14 +521,15 @@ int main(int argc, char* argv[]) {
     mbufs_pools[i] = create_mbuf_pool(lcore_id);
   }
 
-  /* Initialize all ports. */
-  if (port_init(config.rx.port, 1, 1, mbufs_pools)) {
-    rte_exit(EXIT_FAILURE, "Cannot init rx port %" PRIu16 "\n", 0);
-  }
-
   if (port_init(config.tx.port, config.tx.num_cores, config.tx.num_cores,
                 mbufs_pools)) {
     rte_exit(EXIT_FAILURE, "Cannot init tx port %" PRIu16 "\n", 0);
+  }
+
+  if (config.rx.port != config.tx.port) {
+    if (port_init(config.rx.port, 1, 1, mbufs_pools)) {
+      rte_exit(EXIT_FAILURE, "Cannot init rx port %" PRIu16 "\n", 0);
+    }
   }
 
   generate_unique_flows_per_worker();
