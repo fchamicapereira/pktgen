@@ -21,4 +21,4 @@ void sleep_s(time_s_t time);
 }
 #endif
 
-#endif  // PKTGEN_SRC_CLOCK_H_
+#endif // PKTGEN_SRC_CLOCK_H_

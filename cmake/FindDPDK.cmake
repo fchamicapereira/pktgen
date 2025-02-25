@@ -71,7 +71,7 @@ if(DPDK_FOUND)
     message("-----------")
   endif()
 else()
-  message(ERROR "DPDK not found with pkg-config trying legacy mode")
+  message(ERROR " DPDK not found with pkg-config trying legacy mode")
 
   # Find the include dirs and get the version
   find_path(DPDK_VERSION_INCLUDE_DIR rte_version.h REQUIRED PATH_SUFFIXES dpdk include)

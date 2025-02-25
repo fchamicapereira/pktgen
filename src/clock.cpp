@@ -60,14 +60,14 @@ struct TscClock {
 };
 
 uint64_t clock_scale() {
-  static thread_local uint64_t tpus = 0;  // ticks / usec
+  static thread_local uint64_t tpus = 0; // ticks / usec
 
   if (!tpus) {
     struct timespec one_sec = {1, 0};
-    uint64_t start = TscClock::counter();
+    uint64_t start          = TscClock::counter();
     nanosleep(&one_sec, nullptr);
     uint64_t end = TscClock::counter();
-    tpus = (uint64_t)((end - start) / 1e6);
+    tpus         = (uint64_t)((end - start) / 1e6);
   }
 
   return tpus;
@@ -75,10 +75,6 @@ uint64_t clock_scale() {
 
 ticks_t now() { return TscClock::now(); }
 
-void sleep_ms(time_ms_t time) {
-  std::this_thread::sleep_for(std::chrono::milliseconds(time));
-}
+void sleep_ms(time_ms_t time) { std::this_thread::sleep_for(std::chrono::milliseconds(time)); }
 
-void sleep_s(time_s_t time) {
-  std::this_thread::sleep_for(std::chrono::seconds(time));
-}
+void sleep_s(time_s_t time) { std::this_thread::sleep_for(std::chrono::seconds(time)); }

@@ -30,8 +30,7 @@ static void cmd_stats_display_port(uint16_t port_id) {
     return;
   }
   struct rte_eth_xstat_name xstats_names[max_num_stats];
-  if (rte_eth_xstats_get_names(port_id, xstats_names, num_xstats) !=
-      num_xstats) {
+  if (rte_eth_xstats_get_names(port_id, xstats_names, num_xstats) != num_xstats) {
     WARNING("Cannot get xstats (port %u)", port_id);
     return;
   }
@@ -41,8 +40,8 @@ static void cmd_stats_display_port(uint16_t port_id) {
   LOG();
 }
 
-static uint64_t get_port_xstat(uint16_t port, const char* name) {
-  uint64_t xstat_id = 0;
+static uint64_t get_port_xstat(uint16_t port, const char *name) {
+  uint64_t xstat_id    = 0;
   uint64_t xstat_value = 0;
 
   if (rte_eth_xstats_get_id_by_name(port, name, &xstat_id) != 0) {
@@ -59,7 +58,7 @@ static uint64_t get_port_xstat(uint16_t port, const char* name) {
 }
 
 stats_t get_stats() {
-  uint64_t rx_good_pkts = get_port_xstat(config.rx.port, "rx_good_packets");
+  uint64_t rx_good_pkts   = get_port_xstat(config.rx.port, "rx_good_packets");
   uint64_t rx_missed_pkts = get_port_xstat(config.rx.port, "rx_missed_errors");
 
   // We don't care if we missed them, the fact that we've received them back is
@@ -110,8 +109,7 @@ static void reset_stats(uint16_t port) {
 
   retval = rte_eth_xstats_reset(port);
   if (retval != 0) {
-    WARNING("Error reseting xstats (port %u) info: %s", port,
-            strerror(-retval));
+    WARNING("Error reseting xstats (port %u) info: %s", port, strerror(-retval));
   }
 }
 

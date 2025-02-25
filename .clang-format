@@ -1,4 +1,6 @@
-# Use the Google style in this project.
-BasedOnStyle: Google
-IndentWidth: 2
-IndentAccessModifiers: false
+---
+BasedOnStyle: LLVM
+Standard: Cpp11
+SortIncludes: false
+ColumnLimit: 140
+AlignConsecutiveAssignments: true
