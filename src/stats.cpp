@@ -59,19 +59,27 @@ static uint64_t get_port_xstat(uint16_t port, const char *name) {
 
 stats_t get_stats() {
   uint64_t rx_good_pkts   = get_port_xstat(config.rx.port, "rx_good_packets");
+  uint64_t rx_good_bytes  = get_port_xstat(config.rx.port, "rx_good_bytes");
   uint64_t rx_missed_pkts = get_port_xstat(config.rx.port, "rx_missed_errors");
+  uint64_t rx_error_bytes = get_port_xstat(config.rx.port, "rx_error_bytes");
 
-  // We don't care if we missed them, the fact that we've received them back is
-  // good enough.
-  uint64_t rx_pkts = rx_good_pkts + rx_missed_pkts;
-  uint64_t tx_pkts = get_port_xstat(config.tx.port, "tx_good_packets");
+  // We don't care if we missed them, the fact that we've received them back is good enough.
+  uint64_t rx_pkts  = rx_good_pkts + rx_missed_pkts;
+  uint64_t rx_bytes = rx_good_bytes + rx_error_bytes;
+  uint64_t tx_pkts  = get_port_xstat(config.tx.port, "tx_good_packets");
+  uint64_t tx_bytes = get_port_xstat(config.tx.port, "tx_good_bytes");
 
-  // Reseting stats is not atomic, so there's a chance we detect more packets
-  // received that sent. It's not that problematic, but let's take that into
-  // consideration.
-  rx_pkts = RTE_MIN(rx_pkts, tx_pkts);
+  // Reseting stats is not atomic, so there's a chance we detect more packets received that sent.
+  // It's not that problematic, but let's take that into consideration.
+  rx_pkts  = RTE_MIN(rx_pkts, tx_pkts);
+  rx_bytes = RTE_MIN(rx_bytes, tx_bytes);
 
-  stats_t stats = {.rx_pkts = rx_pkts, .tx_pkts = tx_pkts};
+  stats_t stats = {
+      .rx_pkts  = rx_pkts,
+      .rx_bytes = rx_bytes,
+      .tx_pkts  = tx_pkts,
+      .tx_bytes = tx_bytes,
+  };
 
   return stats;
 }
@@ -94,8 +102,8 @@ void cmd_stats_display_compact() {
 
   LOG();
   LOG("~~~~~~ Pktgen ~~~~~~");
-  LOG("  TX:   %" PRIu64, stats.tx_pkts);
-  LOG("  RX:   %" PRIu64, stats.rx_pkts);
+  LOG("  TX:   %" PRIu64 " pkts %" PRIu64 " bytes", stats.tx_pkts, stats.tx_bytes);
+  LOG("  RX:   %" PRIu64 " pkts %" PRIu64 " bytes", stats.rx_pkts, stats.rx_bytes);
   LOG("  Loss: %.2f%%", 100 * loss);
 }
 

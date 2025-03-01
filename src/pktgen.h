@@ -152,7 +152,9 @@ void cmd_timer(time_s_t time);
 
 struct stats_t {
   uint64_t rx_pkts;
+  uint64_t rx_bytes;
   uint64_t tx_pkts;
+  uint64_t tx_bytes;
 };
 
 struct stats_t get_stats();
