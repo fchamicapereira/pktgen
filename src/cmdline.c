@@ -157,7 +157,7 @@ static void cmd_start_callback(__rte_unused void *ptr_params, __rte_unused struc
 static void cmd_stop_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) { cmd_stop(); }
 
 static void cmd_stats_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
-  cmd_stats_display_compact();
+  cmd_stats_display();
 }
 
 static void cmd_flows_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
