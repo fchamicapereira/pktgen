@@ -15,18 +15,16 @@ std::vector<std::vector<flow_t>> flows_per_worker;
 static flow_t generate_random_flow() {
   flow_t flow;
 
-  if (config.kvs_mode) {
-    for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
-      flow.kvs.key[i] = (uint8_t)(rand() & 0xff);
-    }
-    for (size_t i = 0; i < MAX_VALUE_SIZE_BYTES; i++) {
-      flow.kvs.value[i] = (uint8_t)(rand() & 0xff);
-    }
-  } else {
-    flow.common.src_ip   = (rte_be32_t)(rand() & 0xffffffff);
-    flow.common.dst_ip   = (rte_be32_t)(rand() & 0xffffffff);
-    flow.common.src_port = (rte_be16_t)(rand() & 0xffff);
-    flow.common.dst_port = (rte_be16_t)(rand() & 0xffff);
+  flow.src_ip   = (rte_be32_t)(rand() & 0xffffffff);
+  flow.dst_ip   = (rte_be32_t)(rand() & 0xffffffff);
+  flow.src_port = (rte_be16_t)(rand() & 0xffff);
+  flow.dst_port = (rte_be16_t)(rand() & 0xffff);
+
+  for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
+    flow.kvs_key[i] = (uint8_t)(rand() & 0xff);
+  }
+  for (size_t i = 0; i < MAX_VALUE_SIZE_BYTES; i++) {
+    flow.kvs_value[i] = (uint8_t)(rand() & 0xff);
   }
 
   return flow;
@@ -37,14 +35,14 @@ struct flow_hash_t {
     if (config.kvs_mode) {
       size_t hash = 0;
       for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
-        hash ^= std::hash<int>()(flow.kvs.key[i]);
+        hash ^= std::hash<int>()(flow.kvs_key[i]);
       }
       return hash;
     } else {
-      size_t hash = std::hash<int>()(flow.common.src_ip);
-      hash ^= std::hash<int>()(flow.common.dst_ip);
-      hash ^= std::hash<int>()(flow.common.src_port);
-      hash ^= std::hash<int>()(flow.common.dst_port);
+      size_t hash = std::hash<int>()(flow.src_ip);
+      hash ^= std::hash<int>()(flow.dst_ip);
+      hash ^= std::hash<int>()(flow.src_port);
+      hash ^= std::hash<int>()(flow.dst_port);
       return hash;
     }
   }
@@ -54,14 +52,13 @@ struct flow_comp_t {
   bool operator()(const flow_t &f1, const flow_t &f2) const {
     if (config.kvs_mode) {
       for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
-        if (f1.kvs.key[i] != f2.kvs.key[i]) {
+        if (f1.kvs_key[i] != f2.kvs_key[i]) {
           return false;
         }
       }
       return true;
     } else {
-      return f1.common.src_ip == f2.common.src_ip && f1.common.dst_ip == f2.common.dst_ip && f1.common.src_port == f2.common.src_port &&
-             f1.common.dst_port == f2.common.dst_port;
+      return f1.src_ip == f2.src_ip && f1.dst_ip == f2.dst_ip && f1.src_port == f2.src_port && f1.dst_port == f2.dst_port;
     }
   };
 };
@@ -86,7 +83,9 @@ void generate_unique_flows_per_worker() {
     }
 
     if (config.crc_unique_flows) {
-      crc32_t crc = calculate_crc32((byte_t *)&flow, config.kvs_mode ? sizeof(flow.kvs) : sizeof(flow.common)) & crc_mask;
+      const int len = config.kvs_mode ? sizeof(flow.kvs_key) + sizeof(flow.kvs_value)
+                                      : sizeof(flow.src_ip) + sizeof(flow.dst_ip) + sizeof(flow.src_port) + sizeof(flow.dst_port);
+      crc32_t crc   = calculate_crc32((byte_t *)&flow, len) & crc_mask;
 
       // Although the flow is unique, its masked CRC is not.
       if (flows_crc.find(crc) != flows_crc.end()) {
@@ -118,14 +117,13 @@ void cmd_flows_display() {
       if (config.kvs_mode) {
         std::stringstream ss;
         for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
-          ss << std::hex << (int)flow.kvs.key[i];
+          ss << std::hex << (int)flow.kvs_key[i];
         }
         LOG("0x%s", ss.str().c_str());
       } else {
-        LOG("%u.%u.%u.%u:%u -> %u.%u.%u.%u:%u", (flow.common.src_ip >> 0) & 0xff, (flow.common.src_ip >> 8) & 0xff,
-            (flow.common.src_ip >> 16) & 0xff, (flow.common.src_ip >> 24) & 0xff, rte_bswap16(flow.common.src_port),
-            (flow.common.dst_ip >> 0) & 0xff, (flow.common.dst_ip >> 8) & 0xff, (flow.common.dst_ip >> 16) & 0xff,
-            (flow.common.dst_ip >> 24) & 0xff, rte_bswap16(flow.common.dst_port));
+        LOG("%u.%u.%u.%u:%u -> %u.%u.%u.%u:%u", (flow.src_ip >> 0) & 0xff, (flow.src_ip >> 8) & 0xff, (flow.src_ip >> 16) & 0xff,
+            (flow.src_ip >> 24) & 0xff, rte_bswap16(flow.src_port), (flow.dst_ip >> 0) & 0xff, (flow.dst_ip >> 8) & 0xff,
+            (flow.dst_ip >> 16) & 0xff, (flow.dst_ip >> 24) & 0xff, rte_bswap16(flow.dst_port));
       }
     }
   }

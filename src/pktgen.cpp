@@ -238,14 +238,18 @@ static void modify_packet(byte_t *pkt, const flow_t &flow) {
   }
 
   if (config.kvs_mode) {
+    ip_hdr->src_addr  = flow.src_ip;
+    udp_hdr->src_port = flow.src_port;
+    udp_hdr->dst_port = rte_cpu_to_be_16(KVSTORE_PORT);
+
     struct kvs_hdr_t *kvs_hdr = (struct kvs_hdr_t *)(udp_hdr + 1);
-    memcpy(kvs_hdr->key, flow.kvs.key, KEY_SIZE_BYTES);
-    memcpy(kvs_hdr->value, flow.kvs.value, MAX_VALUE_SIZE_BYTES);
+    memcpy(kvs_hdr->key, flow.kvs_key, KEY_SIZE_BYTES);
+    memcpy(kvs_hdr->value, flow.kvs_value, MAX_VALUE_SIZE_BYTES);
   } else {
-    ip_hdr->src_addr  = flow.common.src_ip;
-    ip_hdr->dst_addr  = flow.common.dst_ip;
-    udp_hdr->src_port = flow.common.src_port;
-    udp_hdr->dst_port = flow.common.dst_port;
+    ip_hdr->src_addr  = flow.src_ip;
+    udp_hdr->src_port = flow.src_port;
+    ip_hdr->dst_addr  = flow.dst_ip;
+    udp_hdr->dst_port = flow.dst_port;
   }
 }
 
