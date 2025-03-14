@@ -15,16 +15,16 @@ std::vector<std::vector<flow_t>> flows_per_worker;
 static flow_t generate_random_flow() {
   flow_t flow;
 
-  flow.src_ip   = (rte_be32_t)(rand() & 0xffffffff);
-  flow.dst_ip   = (rte_be32_t)(rand() & 0xffffffff);
-  flow.src_port = (rte_be16_t)(rand() & 0xffff);
-  flow.dst_port = (rte_be16_t)(rand() & 0xffff);
+  flow.src_ip   = (rte_be32_t)(rte_rand() & 0xffffffff);
+  flow.dst_ip   = (rte_be32_t)(rte_rand() & 0xffffffff);
+  flow.src_port = (rte_be16_t)(rte_rand() & 0xffff);
+  flow.dst_port = (rte_be16_t)(rte_rand() & 0xffff);
 
   for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
-    flow.kvs_key[i] = (uint8_t)(rand() & 0xff);
+    flow.kvs_key[i] = (uint8_t)(rte_rand() & 0xff);
   }
   for (size_t i = 0; i < MAX_VALUE_SIZE_BYTES; i++) {
-    flow.kvs_value[i] = (uint8_t)(rand() & 0xff);
+    flow.kvs_value[i] = (uint8_t)(rte_rand() & 0xff);
   }
 
   return flow;

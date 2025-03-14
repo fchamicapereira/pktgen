@@ -101,11 +101,18 @@ struct runtime_config_t {
   time_ns_t flow_ttl;
 };
 
+enum traffic_dist_t {
+  UNIFORM = 0,
+  ZIPF    = 1,
+};
+
 struct config_t {
   bool test_and_exit;
   bool dump_flows_to_file;
 
   uint32_t num_flows;
+  enum traffic_dist_t dist;
+  double zipf_param;
   bool crc_unique_flows;
   uint32_t crc_bits;
   time_ns_t exp_time;

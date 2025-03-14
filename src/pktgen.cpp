@@ -27,6 +27,7 @@
 #include "clock.h"
 #include "flows.h"
 #include "log.h"
+#include "random.h"
 
 // Source/destination MACs
 const struct rte_ether_addr src_mac = {{0xb4, 0x96, 0x91, 0xa4, 0x02, 0xe9}};
@@ -309,6 +310,17 @@ static int tx_worker_main(void *arg) {
   size_t num_total_flows       = worker_config->flows.size();
   size_t num_base_flows        = num_total_flows / 2;
 
+  std::vector<uint32_t> flow_idx_seq;
+  switch (config.dist) {
+  case UNIFORM:
+    flow_idx_seq = generate_uniform_flow_idx_sequence(num_base_flows);
+    break;
+  case ZIPF:
+    flow_idx_seq = generate_zipf_flow_idx_sequence(num_base_flows, config.zipf_param);
+    break;
+  }
+  size_t flow_idx_seq_size = flow_idx_seq.size();
+
   struct rte_mbuf **mbufs = (struct rte_mbuf **)rte_malloc("mbufs", sizeof(rte_mbuf *) * NUM_SAMPLE_PACKETS, 0);
   if (mbufs == NULL) {
     rte_exit(EXIT_FAILURE, "Cannot allocate mbufs\n");
@@ -415,7 +427,7 @@ static int tx_worker_main(void *arg) {
       total_pkt_size += mbuf->pkt_len;
       byte_t *pkt = rte_pktmbuf_mtod(mbuf, byte_t *);
 
-      uint32_t flow_idx         = (mbuf_burst_offset + i) % num_base_flows;
+      uint32_t flow_idx         = flow_idx_seq[(mbuf_burst_offset + i) % flow_idx_seq_size];
       uint8_t &chosen_flows_idx = chosen_flows_idxs[flow_idx];
       ticks_t &flow_timer       = flows_timers[flow_idx];
 

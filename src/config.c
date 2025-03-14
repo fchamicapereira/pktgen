@@ -22,6 +22,11 @@
 #define CMD_MARK_WARMUP_PKTS "mark-warmup-packets"
 #define CMD_DUMP_FLOWS_TO_FILE "dump-flows-to-file"
 #define CMD_KVS_MODE "kvs-mode"
+#define CMD_TRAFFIC_DISTRIBUTION "dist"
+#define CMD_ZIPF_PARAM "zipf-param"
+
+#define TRAFFIC_DISTRIBUTION_UNIFORM "uniform"
+#define TRAFFIC_DISTRIBUTION_ZIPF "zipf"
 
 #define DEFAULT_PKT_SIZE MIN_PKT_SIZE
 #define DEFAULT_CRC_UNIQUE_FLOWS false
@@ -32,6 +37,8 @@
 #define DEFAULT_MARK_WARMUP_PKTS false
 #define DEFAULT_DUMP_FLOWS_TO_FILE false
 #define DEFAULT_KVS_MODE false
+#define DEFAULT_TRAFFIC_DISTRIBUTION UNIFORM
+#define DEFAULT_ZIPF_PARAM 1.26
 
 enum {
   /* long options mapped to short options: first long only option value must
@@ -51,6 +58,8 @@ enum {
   CMD_MARK_WARMUP_PKTS_NUM,
   CMD_DUMP_FLOWS_TO_FILE_NUM,
   CMD_KVS_MODE_NUM,
+  CMD_TRAFFIC_DISTRIBUTION_NUM,
+  CMD_ZIPF_PARAM_NUM,
 };
 
 /* if we ever need short options, add to this string */
@@ -70,9 +79,21 @@ static const struct option long_options[] = {{CMD_HELP, no_argument, NULL, CMD_H
                                              {CMD_MARK_WARMUP_PKTS, no_argument, NULL, CMD_MARK_WARMUP_PKTS_NUM},
                                              {CMD_DUMP_FLOWS_TO_FILE, no_argument, NULL, CMD_DUMP_FLOWS_TO_FILE_NUM},
                                              {CMD_KVS_MODE, no_argument, NULL, CMD_KVS_MODE_NUM},
+                                             {CMD_TRAFFIC_DISTRIBUTION, required_argument, NULL, CMD_TRAFFIC_DISTRIBUTION_NUM},
+                                             {CMD_ZIPF_PARAM, required_argument, NULL, CMD_ZIPF_PARAM_NUM},
                                              {NULL, 0, NULL, 0}};
 
 void config_print_usage(char **argv) {
+  char default_traffic_dist_str[15] = "\0";
+  switch (DEFAULT_TRAFFIC_DISTRIBUTION) {
+  case UNIFORM:
+    sprintf(default_traffic_dist_str, "uniform");
+    break;
+  case ZIPF:
+    sprintf(default_traffic_dist_str, "zipf");
+    break;
+  }
+
   LOG("Usage:\n"
       "%s [EAL options] --\n"
       "\t[--help]: Show this help and exit\n"
@@ -89,9 +110,11 @@ void config_print_usage(char **argv) {
       "\t[--" CMD_MARK_WARMUP_PKTS "]: mark warmup packets with a custom transport protocol (0x%x) "
       "(default=%d)\n"
       "\t[--" CMD_DUMP_FLOWS_TO_FILE "]: dump flows to pcap file (default=%d)\n"
-      "\t[--" CMD_KVS_MODE "]: enable KVS mode (default=%d)\n",
+      "\t[--" CMD_KVS_MODE "]: enable KVS mode (default=%d)\n"
+      "\t[--" CMD_TRAFFIC_DISTRIBUTION " <dist>]: traffic distribution (default=%s)\n"
+      "\t[--" CMD_ZIPF_PARAM " <param>]: Zipf parameter (default=%.2f)\n",
       argv[0], DEFAULT_TOTAL_FLOWS, DEFAULT_PKT_SIZE, DEFAULT_CRC_UNIQUE_FLOWS ? "true" : "false", DEFAULT_CRC_BITS, WARMUP_PROTO_ID,
-      DEFAULT_MARK_WARMUP_PKTS, DEFAULT_DUMP_FLOWS_TO_FILE, DEFAULT_KVS_MODE);
+      DEFAULT_MARK_WARMUP_PKTS, DEFAULT_DUMP_FLOWS_TO_FILE, DEFAULT_KVS_MODE, default_traffic_dist_str, DEFAULT_ZIPF_PARAM);
 }
 
 static uintmax_t parse_int(const char *str, const char *name, int base) {
@@ -99,6 +122,17 @@ static uintmax_t parse_int(const char *str, const char *name, int base) {
   intmax_t result = strtoimax(str, &temp, base);
 
   // There's also a weird failure case with overflows, but let's not care
+  if (temp == str || *temp != '\0') {
+    rte_exit(EXIT_FAILURE, "Error while parsing '%s': %s\n", name, str);
+  }
+
+  return result;
+}
+
+static double parse_double(const char *str, const char *name) {
+  char *temp;
+  double result = strtod(str, &temp);
+
   if (temp == str || *temp != '\0') {
     rte_exit(EXIT_FAILURE, "Error while parsing '%s': %s\n", name, str);
   }
@@ -117,6 +151,8 @@ void config_init(int argc, char **argv) {
   config.test_and_exit       = false;
   config.num_flows           = DEFAULT_TOTAL_FLOWS;
   config.crc_unique_flows    = DEFAULT_CRC_UNIQUE_FLOWS;
+  config.dist                = DEFAULT_TRAFFIC_DISTRIBUTION;
+  config.zipf_param          = DEFAULT_ZIPF_PARAM;
   config.crc_bits            = DEFAULT_CRC_BITS;
   config.exp_time            = 0;
   config.pkt_size            = DEFAULT_PKT_SIZE;
@@ -170,6 +206,19 @@ void config_init(int argc, char **argv) {
 
       PARSER_ASSERT(config.num_flows % 2 == 0, "Number of flows must be even (requested %" PRIu32 ").\n", config.num_flows);
     } break;
+    case CMD_TRAFFIC_DISTRIBUTION_NUM: {
+      if (strcmp(optarg, TRAFFIC_DISTRIBUTION_UNIFORM) == 0) {
+        config.dist = UNIFORM;
+      } else if (strcmp(optarg, TRAFFIC_DISTRIBUTION_ZIPF) == 0) {
+        config.dist = ZIPF;
+      } else {
+        rte_exit(EXIT_FAILURE, "Invalid traffic distribution: %s\n", optarg);
+      }
+    } break;
+    case CMD_ZIPF_PARAM_NUM: {
+      config.zipf_param = parse_double(optarg, CMD_ZIPF_PARAM);
+      PARSER_ASSERT(config.zipf_param > 0, "Zipf parameter must be > 0 (requested %.2f).\n", config.zipf_param);
+    } break;
     case CMD_CRC_UNIQUE_FLOWS_NUM: {
       config.crc_unique_flows = true;
     } break;
@@ -206,7 +255,7 @@ void config_init(int argc, char **argv) {
     } break;
     case CMD_RANDOM_SEED_NUM: {
       uint32_t seed = parse_int(optarg, CMD_RANDOM_SEED, 10);
-      srand(seed);
+      rte_srand(seed);
     } break;
     case CMD_MARK_WARMUP_PKTS_NUM: {
       config.mark_warmup_packets = true;
@@ -233,7 +282,11 @@ void config_init(int argc, char **argv) {
                 "Too many cores (%" PRIu16 ") for the requested number of flows (%" PRIu32 "). Use at most half the number of flows.\n",
                 config.tx.num_cores, config.num_flows);
 
-  config.max_churn = ((double)(60.0 * config.num_flows)) / NS_TO_S(MIN_CHURN_ACTION_TIME_MULTIPLIER * config.exp_time);
+  if (config.exp_time > 0) {
+    config.max_churn = ((double)(60.0 * config.num_flows)) / NS_TO_S(MIN_CHURN_ACTION_TIME_MULTIPLIER * config.exp_time);
+  } else {
+    config.max_churn = 0;
+  }
 
   if (config.kvs_mode) {
     if (custom_pkt_size) {
@@ -255,11 +308,23 @@ void config_init(int argc, char **argv) {
 }
 
 void config_print() {
+  char traffic_dist_str[15] = "\0";
+  switch (config.dist) {
+  case UNIFORM:
+    sprintf(traffic_dist_str, "uniform");
+    break;
+  case ZIPF:
+    sprintf(traffic_dist_str, "zipf");
+    break;
+  }
+
   LOG("\n----- Config -----");
   LOG("RX port:          %" PRIu16, config.rx.port);
   LOG("TX port:          %" PRIu16, config.tx.port);
   LOG("TX cores:         %" PRIu16, config.tx.num_cores);
   LOG("Flows:            %" PRIu16 "", config.num_flows);
+  LOG("Traffic dist:     %s", traffic_dist_str);
+  LOG("Zipf param:       %.2f", config.zipf_param);
   LOG("Flows CRC unique: %s", config.crc_unique_flows ? "true" : "false");
   LOG("CRC bits:         %" PRIu32 "", config.crc_bits);
   LOG("Expiration time:  %" PRIu64 " us", config.exp_time / 1000);
