@@ -216,7 +216,7 @@ static void generate_template_packet(byte_t *pkt, uint16_t size) {
     kvs_hdr->op = KVS_OP_PUT;
     memset(kvs_hdr->key, 0, KEY_SIZE_BYTES);
     memset(kvs_hdr->value, 0, MAX_VALUE_SIZE_BYTES);
-    kvs_hdr->status      = KVS_STATUS_CACHE_MISS;
+    kvs_hdr->status      = KVS_STATUS_MISS;
     kvs_hdr->client_port = 0;
   }
 
