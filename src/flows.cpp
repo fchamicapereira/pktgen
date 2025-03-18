@@ -121,9 +121,10 @@ void cmd_flows_display() {
         }
         LOG("0x%s", ss.str().c_str());
       } else {
-        LOG("%u.%u.%u.%u:%u -> %u.%u.%u.%u:%u", (flow.src_ip >> 0) & 0xff, (flow.src_ip >> 8) & 0xff, (flow.src_ip >> 16) & 0xff,
-            (flow.src_ip >> 24) & 0xff, rte_bswap16(flow.src_port), (flow.dst_ip >> 0) & 0xff, (flow.dst_ip >> 8) & 0xff,
-            (flow.dst_ip >> 16) & 0xff, (flow.dst_ip >> 24) & 0xff, rte_bswap16(flow.dst_port));
+        LOG("%u.%u.%u.%u:%u -> %u.%u.%u.%u:%u (%08x:%04x -> %08x:%04x)", (flow.src_ip >> 0) & 0xff, (flow.src_ip >> 8) & 0xff,
+            (flow.src_ip >> 16) & 0xff, (flow.src_ip >> 24) & 0xff, rte_bswap16(flow.src_port), (flow.dst_ip >> 0) & 0xff,
+            (flow.dst_ip >> 8) & 0xff, (flow.dst_ip >> 16) & 0xff, (flow.dst_ip >> 24) & 0xff, rte_bswap16(flow.dst_port), flow.src_ip,
+            flow.src_port, flow.dst_ip, flow.dst_port);
       }
     }
   }
