@@ -175,6 +175,8 @@ void config_init(int argc, char **argv) {
   unsigned nb_devices = rte_eth_dev_count_avail();
   unsigned nb_cores   = rte_lcore_count();
 
+  rte_srand(time(NULL));
+
   if (nb_devices < 2) {
     rte_exit(EXIT_FAILURE, "Insufficient number of available devices (%" PRIu16 " detected, but we require at least 2).\n", nb_devices);
   }
