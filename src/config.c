@@ -148,6 +148,7 @@ void config_init(int argc, char **argv) {
   bool custom_pkt_size = false;
 
   // Default configuration values
+  config.seed                = time(NULL);
   config.test_and_exit       = false;
   config.num_flows           = DEFAULT_TOTAL_FLOWS;
   config.crc_unique_flows    = DEFAULT_CRC_UNIQUE_FLOWS;
@@ -174,8 +175,6 @@ void config_init(int argc, char **argv) {
 
   unsigned nb_devices = rte_eth_dev_count_avail();
   unsigned nb_cores   = rte_lcore_count();
-
-  rte_srand(time(NULL));
 
   if (nb_devices < 2) {
     rte_exit(EXIT_FAILURE, "Insufficient number of available devices (%" PRIu16 " detected, but we require at least 2).\n", nb_devices);
@@ -256,8 +255,7 @@ void config_init(int argc, char **argv) {
       PARSER_ASSERT(config.tx.num_cores > 0, "Number of TX cores must be positive (requested %" PRIu16 ").\n", config.tx.num_cores);
     } break;
     case CMD_RANDOM_SEED_NUM: {
-      uint32_t seed = parse_int(optarg, CMD_RANDOM_SEED, 10);
-      rte_srand(seed);
+      config.seed = parse_int(optarg, CMD_RANDOM_SEED, 10);
     } break;
     case CMD_MARK_WARMUP_PKTS_NUM: {
       config.mark_warmup_packets = true;
@@ -272,6 +270,8 @@ void config_init(int argc, char **argv) {
       rte_exit(EXIT_FAILURE, "Unknown option %c\n", opt);
     }
   }
+
+  rte_srand(config.seed);
 
   PARSER_ASSERT(!config.crc_unique_flows || (config.num_flows <= (uint32_t)(1 << config.crc_bits)),
                 "Not enough CRC bits for the requested number of flows (flows=%" PRIu32 ", crc bits=%" PRIu32 ", max flows=%" PRIu32 ").\n",
@@ -324,6 +324,7 @@ void config_print() {
   LOG("RX port:          %" PRIu16, config.rx.port);
   LOG("TX port:          %" PRIu16, config.tx.port);
   LOG("TX cores:         %" PRIu16, config.tx.num_cores);
+  LOG("Random seed:      %" PRIu64 "", config.seed);
   LOG("Flows:            %" PRIu16 "", config.num_flows);
   LOG("Traffic dist:     %s", traffic_dist_str);
   LOG("Zipf param:       %.2f", config.zipf_param);

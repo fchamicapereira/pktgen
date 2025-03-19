@@ -110,6 +110,7 @@ struct config_t {
   bool test_and_exit;
   bool dump_flows_to_file;
 
+  uint64_t seed;
   uint32_t num_flows;
   enum traffic_dist_t dist;
   double zipf_param;
