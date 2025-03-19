@@ -6,6 +6,7 @@
 #include <sstream>
 #include <unordered_set>
 #include <vector>
+#include <iomanip>
 
 #include "log.h"
 #include "pktgen.h"
@@ -117,7 +118,7 @@ void cmd_flows_display() {
       if (config.kvs_mode) {
         std::stringstream ss;
         for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
-          ss << std::hex << (int)flow.kvs_key[i];
+          ss << std::hex << std::setw(2) << std::setfill('0') << (int)flow.kvs_key[i];
         }
         LOG("0x%s", ss.str().c_str());
       } else {

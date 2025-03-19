@@ -380,7 +380,7 @@ static int tx_worker_main(void *arg) {
   ticks_t flow_ticks            = worker_config->runtime->flow_ttl * clock_scale() / 1000;
   ticks_t flow_ticks_offset_inc = flow_ticks / num_base_flows;
 
-  // This is always contain a value in {0,1}, allowing us to alternate between 2
+  // This always contains a value in {0,1}, allowing us to alternate between 2
   // different values of flows (thus inducing churn).
   std::vector<uint8_t> chosen_flows_idxs(num_base_flows, 0);
   std::vector<ticks_t> flows_timers(num_base_flows);
