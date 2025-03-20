@@ -218,7 +218,7 @@ void config_init(int argc, char **argv) {
     } break;
     case CMD_ZIPF_PARAM_NUM: {
       config.zipf_param = parse_double(optarg, CMD_ZIPF_PARAM);
-      PARSER_ASSERT(config.zipf_param > 0, "Zipf parameter must be > 0 (requested %.2f).\n", config.zipf_param);
+      PARSER_ASSERT(!(config.zipf_param < 0), "Zipf parameter must be >= 0 (requested %.2f).\n", config.zipf_param);
     } break;
     case CMD_CRC_UNIQUE_FLOWS_NUM: {
       config.crc_unique_flows = true;
