@@ -10,8 +10,9 @@
 
 #include "log.h"
 #include "pktgen.h"
+#include "random.h"
 
-std::vector<std::vector<flow_t>> flows_per_worker;
+std::vector<flow_t> global_flows;
 
 static flow_t generate_random_flow() {
   flow_t flow;
@@ -64,19 +65,18 @@ struct flow_comp_t {
   };
 };
 
-void generate_unique_flows_per_worker() {
-  flows_per_worker = std::vector<std::vector<flow_t>>(config.tx.num_cores);
+std::vector<flow_t> generate_unique_flows() {
+  std::vector<flow_t> flows(config.num_flows);
 
   std::unordered_set<flow_t, flow_hash_t, flow_comp_t> flows_set;
   std::unordered_set<crc32_t> flows_crc;
-  int worker_idx = 0;
 
-  uint32_t crc_mask = (uint32_t)((1 << (uint64_t)(config.crc_bits)) - 1);
+  const uint32_t crc_mask = (uint32_t)((1 << (uint64_t)(config.crc_bits)) - 1);
 
-  LOG("Generating %d flows...", config.num_flows);
+  LOG("Generating %u flows...", config.num_flows);
 
   while (flows_set.size() != config.num_flows) {
-    flow_t flow = generate_random_flow();
+    const flow_t flow = generate_random_flow();
 
     // Already generated. Unlikely, but we still check...
     if (flows_set.find(flow) != flows_set.end()) {
@@ -84,9 +84,9 @@ void generate_unique_flows_per_worker() {
     }
 
     if (config.crc_unique_flows) {
-      const int len = config.kvs_mode ? sizeof(flow.kvs_key) + sizeof(flow.kvs_value)
-                                      : sizeof(flow.src_ip) + sizeof(flow.dst_ip) + sizeof(flow.src_port) + sizeof(flow.dst_port);
-      crc32_t crc   = calculate_crc32((byte_t *)&flow, len) & crc_mask;
+      const int len     = config.kvs_mode ? sizeof(flow.kvs_key) + sizeof(flow.kvs_value)
+                                          : sizeof(flow.src_ip) + sizeof(flow.dst_ip) + sizeof(flow.src_port) + sizeof(flow.dst_port);
+      const crc32_t crc = calculate_crc32((byte_t *)&flow, len) & crc_mask;
 
       // Although the flow is unique, its masked CRC is not.
       if (flows_crc.find(crc) != flows_crc.end()) {
@@ -97,36 +97,80 @@ void generate_unique_flows_per_worker() {
       flows_crc.insert(crc);
     }
 
+    const size_t idx = flows_set.size();
+    flows[idx]       = flow;
     flows_set.insert(flow);
-    flows_per_worker[worker_idx].push_back(flow);
-
-    // Every worker should only see an even number of flows.
-    if (flows_set.size() % 2 == 0) {
-      worker_idx = (worker_idx + 1) % config.tx.num_cores;
-    }
   }
+
+  global_flows = flows;
+
+  return flows;
 }
 
-const std::vector<flow_t> &get_worker_flows(unsigned worker_id) { return flows_per_worker[worker_id]; }
+std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
+  const size_t num_base_flows = config.num_flows / 2;
+
+  std::vector<uint32_t> flow_idx_seq;
+  switch (config.dist) {
+  case UNIFORM:
+    flow_idx_seq = generate_uniform_flow_idx_sequence(num_base_flows);
+    break;
+  case ZIPF:
+    flow_idx_seq = generate_zipf_flow_idx_sequence(num_base_flows, config.zipf_param);
+    break;
+  }
+
+  std::vector<std::vector<uint32_t>> flow_idx_seq_per_worker(config.tx.num_cores);
+
+  uint16_t worker_id = 0;
+  for (size_t i = 0; i < flow_idx_seq.size(); i++) {
+    flow_idx_seq_per_worker[worker_id].push_back(flow_idx_seq[i]);
+    worker_id = (worker_id + 1) % config.tx.num_cores;
+  }
+
+  return flow_idx_seq_per_worker;
+}
+
+std::string flow_to_string(const flow_t &flow) {
+  std::stringstream ss;
+
+  if (config.kvs_mode) {
+    ss << "0x";
+    for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
+      ss << std::hex << std::setw(2) << std::setfill('0') << (int)flow.kvs_key[i];
+    }
+  } else {
+    ss << std::dec;
+
+    ss << ((flow.src_ip >> 0) & 0xff);
+    ss << ".";
+    ss << ((flow.src_ip >> 8) & 0xff);
+    ss << ".";
+    ss << ((flow.src_ip >> 16) & 0xff);
+    ss << ".";
+    ss << ((flow.src_ip >> 24) & 0xff);
+    ss << ":";
+    ss << rte_bswap16(flow.src_port);
+    ss << " -> ";
+    ss << ((flow.dst_ip >> 0) & 0xff);
+    ss << ".";
+    ss << ((flow.dst_ip >> 8) & 0xff);
+    ss << ".";
+    ss << ((flow.dst_ip >> 16) & 0xff);
+    ss << ".";
+    ss << ((flow.dst_ip >> 24) & 0xff);
+    ss << ":";
+    ss << rte_bswap16(flow.dst_port);
+  }
+
+  return ss.str();
+}
 
 void cmd_flows_display() {
   LOG();
   LOG("~~~~~~ %u flows ~~~~~~", config.num_flows);
 
-  for (const std::vector<flow_t> &flows : flows_per_worker) {
-    for (const flow_t &flow : flows) {
-      if (config.kvs_mode) {
-        std::stringstream ss;
-        for (size_t i = 0; i < KEY_SIZE_BYTES; i++) {
-          ss << std::hex << std::setw(2) << std::setfill('0') << (int)flow.kvs_key[i];
-        }
-        LOG("0x%s", ss.str().c_str());
-      } else {
-        LOG("%u.%u.%u.%u:%u -> %u.%u.%u.%u:%u (%08x:%04x -> %08x:%04x)", (flow.src_ip >> 0) & 0xff, (flow.src_ip >> 8) & 0xff,
-            (flow.src_ip >> 16) & 0xff, (flow.src_ip >> 24) & 0xff, rte_bswap16(flow.src_port), (flow.dst_ip >> 0) & 0xff,
-            (flow.dst_ip >> 8) & 0xff, (flow.dst_ip >> 16) & 0xff, (flow.dst_ip >> 24) & 0xff, rte_bswap16(flow.dst_port), flow.src_ip,
-            flow.src_port, flow.dst_ip, flow.dst_port);
-      }
-    }
+  for (const flow_t &flow : global_flows) {
+    LOG("%s", flow_to_string(flow).c_str());
   }
 }

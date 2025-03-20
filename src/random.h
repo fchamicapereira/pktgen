@@ -10,7 +10,7 @@
 // From Castan [SIGCOMM'18]
 // Source:
 // https://github.com/nal-epfl/castan/blob/master/scripts/pcap_tools/create_zipfian_distribution_pcap.py
-uint64_t zipf_random_number_generator(double zipf_param, uint32_t total_flows) {
+inline uint64_t zipf_random_number_generator(double zipf_param, uint32_t total_flows) {
   double probability = rte_drand();
   assert(probability >= 0 && probability <= 1 && "Invalid probability");
 
@@ -42,7 +42,7 @@ uint64_t zipf_random_number_generator(double zipf_param, uint32_t total_flows) {
   }
 }
 
-std::vector<uint32_t> generate_uniform_flow_idx_sequence(uint32_t num_flows) {
+inline std::vector<uint32_t> generate_uniform_flow_idx_sequence(uint32_t num_flows) {
   std::vector<uint32_t> flow_idx_sequence(num_flows);
   for (uint32_t i = 0; i < num_flows; i++) {
     flow_idx_sequence[i] = i;
@@ -50,7 +50,7 @@ std::vector<uint32_t> generate_uniform_flow_idx_sequence(uint32_t num_flows) {
   return flow_idx_sequence;
 }
 
-std::vector<uint32_t> generate_zipf_flow_idx_sequence(uint32_t num_flows, double zipf_param) {
+inline std::vector<uint32_t> generate_zipf_flow_idx_sequence(uint32_t num_flows, double zipf_param) {
   std::unordered_set<uint32_t> used_flow_idxs;
   std::vector<uint32_t> flow_idx_sequence;
   while (used_flow_idxs.size() < num_flows) {

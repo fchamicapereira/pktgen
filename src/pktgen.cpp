@@ -48,16 +48,18 @@ struct worker_config_t {
   bool ready;
 
   struct rte_mempool *pool;
-  uint16_t queue_id;
+  const uint16_t queue_id;
 
-  bytes_t pkt_size;
-  std::vector<flow_t> flows;
+  const bytes_t pkt_size;
+  const std::vector<flow_t> &flows;
+  const std::vector<uint32_t> flow_idx_seq;
 
   const runtime_config_t *runtime;
 
   worker_config_t(struct rte_mempool *_pool, uint16_t _queue_id, bytes_t _pkt_size, const std::vector<flow_t> &_flows,
-                  const runtime_config_t *_runtime)
-      : ready(false), pool(_pool), queue_id(_queue_id), pkt_size(_pkt_size), flows(_flows), runtime(_runtime) {}
+                  const std::vector<uint32_t> &_flow_idx_seq, const runtime_config_t *_runtime)
+      : ready(false), pool(_pool), queue_id(_queue_id), pkt_size(_pkt_size), flows(_flows), flow_idx_seq(_flow_idx_seq), runtime(_runtime) {
+  }
 };
 
 // Initializes a given port using global settings.
@@ -254,7 +256,7 @@ static void modify_packet(byte_t *pkt, const flow_t &flow) {
   }
 }
 
-static void dump_flows_to_file() {
+static void dump_flows_to_file(const std::vector<flow_t> &flows) {
   bytes_t pkt_size_without_crc = config.pkt_size - 4;
 
   byte_t template_packet[MAX_PKT_SIZE];
@@ -274,13 +276,9 @@ static void dump_flows_to_file() {
     exit(7);
   }
 
-  for (unsigned i = 0; i < config.tx.num_cores; i++) {
-    const auto &flows = get_worker_flows(i);
-
-    for (const auto &flow : flows) {
-      modify_packet(template_packet, flow);
-      pcap_dump((u_char *)pd, &header, template_packet);
-    }
+  for (const flow_t &flow : flows) {
+    modify_packet(template_packet, flow);
+    pcap_dump((u_char *)pd, &header, template_packet);
   }
 
   pcap_dump_close(pd);
@@ -306,20 +304,11 @@ static inline uint64_t compute_ticks_per_burst(rate_gbps_t rate, bits_t pkt_size
 static int tx_worker_main(void *arg) {
   worker_config_t *worker_config = (worker_config_t *)arg;
 
-  bytes_t pkt_size_without_crc = worker_config->pkt_size - RTE_ETHER_CRC_LEN;
-  size_t num_total_flows       = worker_config->flows.size();
-  size_t num_base_flows        = num_total_flows / 2;
+  const bytes_t pkt_size_without_crc = worker_config->pkt_size - RTE_ETHER_CRC_LEN;
+  const size_t num_total_flows       = worker_config->flows.size();
+  const size_t num_base_flows        = num_total_flows / 2;
 
-  std::vector<uint32_t> flow_idx_seq;
-  switch (config.dist) {
-  case UNIFORM:
-    flow_idx_seq = generate_uniform_flow_idx_sequence(num_base_flows);
-    break;
-  case ZIPF:
-    flow_idx_seq = generate_zipf_flow_idx_sequence(num_base_flows, config.zipf_param);
-    break;
-  }
-  size_t flow_idx_seq_size = flow_idx_seq.size();
+  const size_t flow_idx_seq_size = worker_config->flow_idx_seq.size();
 
   struct rte_mbuf **mbufs = (struct rte_mbuf **)rte_malloc("mbufs", sizeof(rte_mbuf *) * NUM_SAMPLE_PACKETS, 0);
   if (mbufs == NULL) {
@@ -340,7 +329,7 @@ static int tx_worker_main(void *arg) {
     }
   }
 
-  flow_t *flows[2] = {base_flows, churn_flows};
+  const flow_t *flows[2] = {base_flows, churn_flows};
 
   // Prefill buffers with template packet.
   for (uint32_t i = 0; i < NUM_SAMPLE_PACKETS; i++) {
@@ -427,7 +416,7 @@ static int tx_worker_main(void *arg) {
       total_pkt_size += mbuf->pkt_len;
       byte_t *pkt = rte_pktmbuf_mtod(mbuf, byte_t *);
 
-      uint32_t flow_idx         = flow_idx_seq[(mbuf_burst_offset + i) % flow_idx_seq_size];
+      const uint32_t flow_idx   = worker_config->flow_idx_seq[(mbuf_burst_offset + i) % flow_idx_seq_size];
       uint8_t &chosen_flows_idx = chosen_flows_idxs[flow_idx];
       ticks_t &flow_timer       = flows_timers[flow_idx];
 
@@ -436,8 +425,9 @@ static int tx_worker_main(void *arg) {
         chosen_flows_idx = (chosen_flows_idx + 1) % 2;
       }
 
-      flow_t *chosen_flows = flows[chosen_flows_idx];
-      modify_packet(pkt, chosen_flows[flow_idx]);
+      const flow_t *chosen_flows = flows[chosen_flows_idx];
+      const flow_t &flow         = chosen_flows[flow_idx];
+      modify_packet(pkt, flow);
 
       // HACK(sadok): Increase refcnt to avoid freeing.
       mbuf->refcnt = MIN_NUM_MBUFS;
@@ -544,30 +534,30 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  generate_unique_flows_per_worker();
+  const std::vector<flow_t> flows                                  = generate_unique_flows();
+  const std::vector<std::vector<uint32_t>> flow_idx_seq_per_worker = generate_flow_idx_sequence_per_worker();
 
   if (config.dump_flows_to_file) {
-    dump_flows_to_file();
+    dump_flows_to_file(flows);
   }
 
   std::vector<std::unique_ptr<worker_config_t>> workers_configs(config.tx.num_cores);
 
-  for (unsigned i = 0; i < config.tx.num_cores; i++) {
-    unsigned lcore_id = config.tx.cores[i];
-    unsigned queue_id = i;
+  for (uint16_t i = 0; i < config.tx.num_cores; i++) {
+    const std::vector<uint32_t> &flow_idx_seq = flow_idx_seq_per_worker.at(i);
+    const uint16_t lcore_id                   = config.tx.cores[i];
+    const uint16_t queue_id                   = i;
 
-    workers_configs[i] = std::make_unique<worker_config_t>(mbufs_pools[i], queue_id, config.pkt_size, get_worker_flows(i), &config.runtime);
-
+    workers_configs[i] = std::make_unique<worker_config_t>(mbufs_pools[i], queue_id, config.pkt_size, flows, flow_idx_seq, &config.runtime);
     rte_eal_remote_launch(tx_worker_main, static_cast<void *>(workers_configs[i].get()), lcore_id);
   }
 
-  // We no longer need the arrays. This doesn't free the mbufs themselves
-  // though, we still need them.
+  // We no longer need the arrays. This doesn't free the mbufs themselves though, we still need them.
   rte_free(mbufs_pools);
 
   LOG("Waiting for workers...");
 
-  for (auto &worker_config : workers_configs) {
+  for (std::unique_ptr<worker_config_t> &worker_config : workers_configs) {
     while (!worker_config->ready) {
       sleep_ms(100);
     }
