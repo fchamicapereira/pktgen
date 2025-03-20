@@ -12,7 +12,7 @@
 #include "pktgen.h"
 #include "random.h"
 
-std::vector<flow_t> global_flows;
+std::vector<flow_t> flows;
 
 static flow_t generate_random_flow() {
   flow_t flow;
@@ -65,8 +65,8 @@ struct flow_comp_t {
   };
 };
 
-std::vector<flow_t> generate_unique_flows() {
-  std::vector<flow_t> flows(config.num_flows);
+void generate_unique_flows() {
+  flows = std::vector<flow_t>(config.num_flows);
 
   std::unordered_set<flow_t, flow_hash_t, flow_comp_t> flows_set;
   std::unordered_set<crc32_t> flows_crc;
@@ -101,15 +101,14 @@ std::vector<flow_t> generate_unique_flows() {
     flows[idx]       = flow;
     flows_set.insert(flow);
   }
-
-  global_flows = flows;
-
-  return flows;
 }
+
+const std::vector<flow_t> &get_generated_flows() { return flows; }
 
 std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
   const size_t num_base_flows = config.num_flows / 2;
 
+  LOG("Generating distribution of flow indexes...");
   std::vector<uint32_t> flow_idx_seq;
   switch (config.dist) {
   case UNIFORM:
@@ -120,6 +119,7 @@ std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
     break;
   }
 
+  LOG("Distributing flow indexes per worker...");
   std::vector<std::vector<uint32_t>> flow_idx_seq_per_worker(config.tx.num_cores);
 
   uint16_t worker_id = 0;
@@ -170,7 +170,7 @@ void cmd_flows_display() {
   LOG();
   LOG("~~~~~~ %u flows ~~~~~~", config.num_flows);
 
-  for (const flow_t &flow : global_flows) {
+  for (const flow_t &flow : flows) {
     LOG("%s", flow_to_string(flow).c_str());
   }
 }

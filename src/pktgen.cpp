@@ -51,15 +51,13 @@ struct worker_config_t {
   const uint16_t queue_id;
 
   const bytes_t pkt_size;
-  const std::vector<flow_t> &flows;
   const std::vector<uint32_t> flow_idx_seq;
 
   const runtime_config_t *runtime;
 
-  worker_config_t(struct rte_mempool *_pool, uint16_t _queue_id, bytes_t _pkt_size, const std::vector<flow_t> &_flows,
-                  const std::vector<uint32_t> &_flow_idx_seq, const runtime_config_t *_runtime)
-      : ready(false), pool(_pool), queue_id(_queue_id), pkt_size(_pkt_size), flows(_flows), flow_idx_seq(_flow_idx_seq), runtime(_runtime) {
-  }
+  worker_config_t(struct rte_mempool *_pool, uint16_t _queue_id, bytes_t _pkt_size, const std::vector<uint32_t> &_flow_idx_seq,
+                  const runtime_config_t *_runtime)
+      : ready(false), pool(_pool), queue_id(_queue_id), pkt_size(_pkt_size), flow_idx_seq(_flow_idx_seq), runtime(_runtime) {}
 };
 
 // Initializes a given port using global settings.
@@ -256,7 +254,7 @@ static void modify_packet(byte_t *pkt, const flow_t &flow) {
   }
 }
 
-static void dump_flows_to_file(const std::vector<flow_t> &flows) {
+static void dump_flows_to_file() {
   bytes_t pkt_size_without_crc = config.pkt_size - 4;
 
   byte_t template_packet[MAX_PKT_SIZE];
@@ -276,6 +274,7 @@ static void dump_flows_to_file(const std::vector<flow_t> &flows) {
     exit(7);
   }
 
+  const std::vector<flow_t> &flows = get_generated_flows();
   for (const flow_t &flow : flows) {
     modify_packet(template_packet, flow);
     pcap_dump((u_char *)pd, &header, template_packet);
@@ -305,7 +304,8 @@ static int tx_worker_main(void *arg) {
   worker_config_t *worker_config = (worker_config_t *)arg;
 
   const bytes_t pkt_size_without_crc = worker_config->pkt_size - RTE_ETHER_CRC_LEN;
-  const size_t num_total_flows       = worker_config->flows.size();
+  const std::vector<flow_t> &flows   = get_generated_flows();
+  const size_t num_total_flows       = flows.size();
   const size_t num_base_flows        = num_total_flows / 2;
 
   const size_t flow_idx_seq_size = worker_config->flow_idx_seq.size();
@@ -321,15 +321,10 @@ static int tx_worker_main(void *arg) {
   flow_t *base_flows  = (flow_t *)rte_malloc("base_flows", num_base_flows * sizeof(flow_t), 0);
   flow_t *churn_flows = (flow_t *)rte_malloc("churn_flows", num_base_flows * sizeof(flow_t), 0);
 
-  for (uint32_t i = 0; i < num_total_flows; i++) {
-    if (i < num_base_flows) {
-      base_flows[i] = worker_config->flows[i];
-    } else {
-      churn_flows[i - num_base_flows] = worker_config->flows[i];
-    }
-  }
+  std::copy(flows.begin(), flows.begin() + num_base_flows, base_flows);
+  std::copy(flows.begin() + num_base_flows, flows.end(), churn_flows);
 
-  const flow_t *flows[2] = {base_flows, churn_flows};
+  const flow_t *flow_pools[2] = {base_flows, churn_flows};
 
   // Prefill buffers with template packet.
   for (uint32_t i = 0; i < NUM_SAMPLE_PACKETS; i++) {
@@ -425,7 +420,7 @@ static int tx_worker_main(void *arg) {
         chosen_flows_idx = (chosen_flows_idx + 1) % 2;
       }
 
-      const flow_t *chosen_flows = flows[chosen_flows_idx];
+      const flow_t *chosen_flows = flow_pools[chosen_flows_idx];
       const flow_t &flow         = chosen_flows[flow_idx];
       modify_packet(pkt, flow);
 
@@ -534,11 +529,11 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  const std::vector<flow_t> flows                                  = generate_unique_flows();
+  generate_unique_flows();
   const std::vector<std::vector<uint32_t>> flow_idx_seq_per_worker = generate_flow_idx_sequence_per_worker();
 
   if (config.dump_flows_to_file) {
-    dump_flows_to_file(flows);
+    dump_flows_to_file();
   }
 
   std::vector<std::unique_ptr<worker_config_t>> workers_configs(config.tx.num_cores);
@@ -548,7 +543,7 @@ int main(int argc, char *argv[]) {
     const uint16_t lcore_id                   = config.tx.cores[i];
     const uint16_t queue_id                   = i;
 
-    workers_configs[i] = std::make_unique<worker_config_t>(mbufs_pools[i], queue_id, config.pkt_size, flows, flow_idx_seq, &config.runtime);
+    workers_configs[i] = std::make_unique<worker_config_t>(mbufs_pools[i], queue_id, config.pkt_size, flow_idx_seq, &config.runtime);
     rte_eal_remote_launch(tx_worker_main, static_cast<void *>(workers_configs[i].get()), lcore_id);
   }
 

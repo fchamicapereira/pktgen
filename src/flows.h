@@ -16,7 +16,8 @@ struct flow_t {
 };
 
 std::string flow_to_string(const flow_t &flow);
-std::vector<flow_t> generate_unique_flows();
+void generate_unique_flows();
+const std::vector<flow_t> &get_generated_flows();
 std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker();
 
 void generate_unique_flows_per_worker();
