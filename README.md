@@ -27,13 +27,7 @@ $ sudo ./Debug/bin/pktgen $EAL_ARGS -- $PKTGEN_ARGS
 To bring up the help menu from pktgen specifically, one can use a testing EAL configuration:
 
 ```
-$ sudo ./Debug/bin/pktgen \
-    --no-huge \
-    --no-shconf \
-    --vdev "net_tap0,iface=test_rx" \
-    --vdev "net_tap1,iface=test_tx" \
-    -- \
-    --help
+$ sudo ./Debug/bin/pktgen --no-huge --no-shconf --vdev "net_tap0,iface=test_rx" --vdev "net_tap1,iface=test_tx" -- --help
 ```
 
 ## Testing
@@ -41,18 +35,5 @@ $ sudo ./Debug/bin/pktgen \
 Example pktgen configuration (for testing purposes):
 
 ```
-$ sudo ./Debug/bin/pktgen \
-    -m 8192 \
-    --no-huge \
-    --no-shconf \
-    --vdev "net_tap0,iface=test_rx" \
-    --vdev "net_tap1,iface=test_tx" \
-    -- \
-    --total-flows 4 \
-    --tx 1 \
-    --rx 0 \
-    --tx-cores 1 \
-    --crc-unique-flows \
-    --crc-bits 16 \
-    --seed 0
+$ sudo ./Debug/bin/pktgen -m 8192 --no-huge --no-shconf --vdev "net_tap0,iface=test_rx" --vdev "net_tap1,iface=test_tx" -- --tx 1 --rx 0 --tx-cores 4 --total-flows 16 --dist zifp --zipf-param 1.26
 ```

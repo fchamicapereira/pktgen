@@ -23,3 +23,9 @@
     printf("WARNING: " fmt "\n", ##__VA_ARGS__);                                                                                           \
     fflush(stdout);                                                                                                                        \
   }
+
+#define LOG_REWRITE(fmt, ...)                                                                                                              \
+  {                                                                                                                                        \
+    printf(fmt "\r", ##__VA_ARGS__);                                                                                                       \
+    fflush(stdout);                                                                                                                        \
+  }
