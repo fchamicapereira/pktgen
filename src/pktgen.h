@@ -56,7 +56,7 @@ typedef uint64_t time_ns_t;
 typedef uint32_t crc32_t;
 
 #define KEY_SIZE_BYTES 16
-#define MAX_VALUE_SIZE_BYTES 128
+#define MAX_VALUE_SIZE_BYTES 16
 #define KVSTORE_PORT 670
 
 enum kvs_op {
