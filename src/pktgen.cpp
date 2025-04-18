@@ -227,7 +227,7 @@ static void generate_template_packet(byte_t *pkt, uint16_t size) {
   memset(payload, 0xff, payload_size);
 }
 
-static void modify_packet(byte_t *pkt, const flow_t &flow) {
+static void modify_packet(byte_t *pkt, const flow_t &flow, enum kvs_op kvs_op) {
   struct rte_ether_hdr *ether_hdr = (struct rte_ether_hdr *)pkt;
   struct rte_ipv4_hdr *ip_hdr     = (struct rte_ipv4_hdr *)(ether_hdr + 1);
   struct rte_udp_hdr *udp_hdr     = (struct rte_udp_hdr *)(ip_hdr + 1);
@@ -244,6 +244,7 @@ static void modify_packet(byte_t *pkt, const flow_t &flow) {
     udp_hdr->dst_port = rte_cpu_to_be_16(KVSTORE_PORT);
 
     struct kvs_hdr_t *kvs_hdr = (struct kvs_hdr_t *)(udp_hdr + 1);
+    kvs_hdr->op               = kvs_op;
     memcpy(kvs_hdr->key, flow.kvs_key, KEY_SIZE_BYTES);
     memcpy(kvs_hdr->value, flow.kvs_value, MAX_VALUE_SIZE_BYTES);
   } else {
@@ -276,7 +277,7 @@ static void dump_flows_to_file() {
 
   const std::vector<flow_t> &flows = get_generated_flows();
   for (const flow_t &flow : flows) {
-    modify_packet(template_packet, flow);
+    modify_packet(template_packet, flow, KVS_OP_GET);
     pcap_dump((u_char *)pd, &header, template_packet);
   }
 
@@ -303,12 +304,13 @@ static inline uint64_t compute_ticks_per_burst(rate_gbps_t rate, bits_t pkt_size
 static int tx_worker_main(void *arg) {
   worker_config_t *worker_config = (worker_config_t *)arg;
 
-  const bytes_t pkt_size_without_crc = worker_config->pkt_size - RTE_ETHER_CRC_LEN;
-  const std::vector<flow_t> &flows   = get_generated_flows();
-  const size_t num_total_flows       = flows.size();
-  const size_t num_base_flows        = num_total_flows / 2;
-
-  const size_t flow_idx_seq_size = worker_config->flow_idx_seq.size();
+  const bytes_t pkt_size_without_crc                           = worker_config->pkt_size - RTE_ETHER_CRC_LEN;
+  const std::vector<flow_t> &flows                             = get_generated_flows();
+  const size_t num_total_flows                                 = flows.size();
+  const size_t num_base_flows                                  = num_total_flows / 2;
+  const std::vector<std::vector<enum kvs_op>> kvs_ops_per_flow = generate_kvs_ops_per_flow();
+  const size_t total_kvs_ops_per_flow                          = kvs_ops_per_flow[0].size();
+  const size_t flow_idx_seq_size                               = worker_config->flow_idx_seq.size();
 
   struct rte_mbuf **mbufs = (struct rte_mbuf **)rte_malloc("mbufs", sizeof(rte_mbuf *) * NUM_SAMPLE_PACKETS, 0);
   if (mbufs == NULL) {
@@ -338,8 +340,7 @@ static int tx_worker_main(void *arg) {
     rte_memcpy(rte_pktmbuf_mtod(mbufs[i], void *), template_packet, pkt_size_without_crc);
   }
 
-  // Triger clock scale calculation beforehand, as it pauses the execution for 1
-  // second.
+  // Triger clock scale calculation beforehand, as it pauses the execution for 1 second.
   clock_scale();
 
   worker_config->ready = true;
@@ -368,6 +369,7 @@ static int tx_worker_main(void *arg) {
   // different values of flows (thus inducing churn).
   std::vector<uint8_t> chosen_flows_idxs(num_base_flows, 0);
   std::vector<ticks_t> flows_timers(num_base_flows);
+  std::vector<size_t> chosen_kvs_op_idxs(num_base_flows, 0);
 
   // Spreading out the churn, to avoid bursty churn.
   for (uint32_t i = 0; i < num_base_flows; i++) {
@@ -415,6 +417,10 @@ static int tx_worker_main(void *arg) {
       uint8_t &chosen_flows_idx = chosen_flows_idxs[flow_idx];
       ticks_t &flow_timer       = flows_timers[flow_idx];
 
+      size_t &chosen_kvs_op_idx = chosen_kvs_op_idxs[flow_idx];
+      enum kvs_op chosen_kvs_op = kvs_ops_per_flow[flow_idx][chosen_kvs_op_idx];
+      chosen_kvs_op_idx         = (chosen_kvs_op_idx + 1) % total_kvs_ops_per_flow;
+
       if (flow_ticks > 0 && period_start_tick >= flow_timer) {
         flow_timer += flow_ticks;
         chosen_flows_idx = (chosen_flows_idx + 1) % 2;
@@ -422,7 +428,7 @@ static int tx_worker_main(void *arg) {
 
       const flow_t *chosen_flows = flow_pools[chosen_flows_idx];
       const flow_t &flow         = chosen_flows[flow_idx];
-      modify_packet(pkt, flow);
+      modify_packet(pkt, flow, chosen_kvs_op);
 
       // HACK(sadok): Increase refcnt to avoid freeing.
       mbuf->refcnt = MIN_NUM_MBUFS;

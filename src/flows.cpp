@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <vector>
 #include <iomanip>
+#include <cmath>
 
 #include "log.h"
 #include "pktgen.h"
@@ -173,4 +174,47 @@ void cmd_flows_display() {
   for (const flow_t &flow : flows) {
     LOG("%s", flow_to_string(flow).c_str());
   }
+}
+
+struct kvs_ratio_t {
+  uint64_t get;
+  uint64_t put;
+};
+
+static struct kvs_ratio_t calculate_kvs_ratio() {
+  double get_ratio         = config.kvs_get_ratio;
+  struct kvs_ratio_t ratio = {.get = 0, .put = 0};
+
+  uint64_t total = 1;
+
+  double lhs = -1;
+  while (std::modf(get_ratio, &lhs) != 0) {
+    total *= 10;
+    get_ratio *= 10;
+  }
+
+  ratio.get = static_cast<uint64_t>(get_ratio);
+  ratio.put = total - ratio.get;
+
+  assert(ratio.get + ratio.put > 0 && "Invalid KVS ratio");
+
+  return ratio;
+}
+
+std::vector<std::vector<enum kvs_op>> generate_kvs_ops_per_flow() {
+  const size_t num_base_flows = config.num_flows / 2;
+  std::vector<std::vector<enum kvs_op>> kvs_ops_per_flow(num_base_flows);
+
+  const struct kvs_ratio_t ratio = calculate_kvs_ratio();
+
+  for (size_t flow_idx = 0; flow_idx < kvs_ops_per_flow.size(); flow_idx++) {
+    for (uint64_t i = 0; i < ratio.get; i++) {
+      kvs_ops_per_flow[flow_idx].push_back(KVS_OP_GET);
+    }
+    for (uint64_t i = 0; i < ratio.put; i++) {
+      kvs_ops_per_flow[flow_idx].push_back(KVS_OP_PUT);
+    }
+  }
+
+  return kvs_ops_per_flow;
 }

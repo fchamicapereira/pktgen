@@ -124,6 +124,7 @@ struct config_t {
   bool warmup_active;
   bool mark_warmup_packets;
   bool kvs_mode;
+  double kvs_get_ratio;
 
   churn_fpm_t max_churn;
   rate_gbps_t rate;

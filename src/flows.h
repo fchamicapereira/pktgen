@@ -23,4 +23,6 @@ std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker();
 void generate_unique_flows_per_worker();
 const std::vector<flow_t> &get_worker_flows(unsigned worker_id);
 
+std::vector<std::vector<enum kvs_op>> generate_kvs_ops_per_flow();
+
 #endif

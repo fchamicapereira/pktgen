@@ -35,5 +35,5 @@ $ sudo ./Debug/bin/pktgen --no-huge --no-shconf --vdev "net_tap0,iface=test_rx" 
 Example pktgen configuration (for testing purposes):
 
 ```
-$ sudo ./Debug/bin/pktgen -m 8192 --no-huge --no-shconf --vdev "net_tap0,iface=test_rx" --vdev "net_tap1,iface=test_tx" -- --tx 1 --rx 0 --tx-cores 4 --total-flows 16 --dist zifp --zipf-param 1.26
+$ sudo ./Debug/bin/pktgen -m 8192 --no-huge --no-shconf --vdev "net_tap0,iface=test_rx" --vdev "net_tap1,iface=test_tx" -- --tx 1 --rx 0 --tx-cores 4 --total-flows 16 --dist zipf --zipf-param 1.26
 ```

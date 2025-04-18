@@ -22,6 +22,7 @@
 #define CMD_MARK_WARMUP_PKTS "mark-warmup-packets"
 #define CMD_DUMP_FLOWS_TO_FILE "dump-flows-to-file"
 #define CMD_KVS_MODE "kvs-mode"
+#define CMD_KVS_GET_RATIO "kvs-get-ratio"
 #define CMD_TRAFFIC_DISTRIBUTION "dist"
 #define CMD_ZIPF_PARAM "zipf-param"
 
@@ -37,6 +38,7 @@
 #define DEFAULT_MARK_WARMUP_PKTS false
 #define DEFAULT_DUMP_FLOWS_TO_FILE false
 #define DEFAULT_KVS_MODE false
+#define DEFAULT_KVS_GET_RATIO 0.0
 #define DEFAULT_TRAFFIC_DISTRIBUTION UNIFORM
 #define DEFAULT_ZIPF_PARAM 1.26
 
@@ -58,6 +60,7 @@ enum {
   CMD_MARK_WARMUP_PKTS_NUM,
   CMD_DUMP_FLOWS_TO_FILE_NUM,
   CMD_KVS_MODE_NUM,
+  CMD_KVS_GET_RATIO_NUM,
   CMD_TRAFFIC_DISTRIBUTION_NUM,
   CMD_ZIPF_PARAM_NUM,
 };
@@ -79,6 +82,7 @@ static const struct option long_options[] = {{CMD_HELP, no_argument, NULL, CMD_H
                                              {CMD_MARK_WARMUP_PKTS, no_argument, NULL, CMD_MARK_WARMUP_PKTS_NUM},
                                              {CMD_DUMP_FLOWS_TO_FILE, no_argument, NULL, CMD_DUMP_FLOWS_TO_FILE_NUM},
                                              {CMD_KVS_MODE, no_argument, NULL, CMD_KVS_MODE_NUM},
+                                             {CMD_KVS_GET_RATIO, required_argument, NULL, CMD_KVS_GET_RATIO_NUM},
                                              {CMD_TRAFFIC_DISTRIBUTION, required_argument, NULL, CMD_TRAFFIC_DISTRIBUTION_NUM},
                                              {CMD_ZIPF_PARAM, required_argument, NULL, CMD_ZIPF_PARAM_NUM},
                                              {NULL, 0, NULL, 0}};
@@ -107,14 +111,15 @@ void config_print_usage(char **argv) {
       "\t[--" CMD_CRC_UNIQUE_FLOWS "]: Flows are CRC unique (default=%s)\n"
       "\t[--" CMD_CRC_BITS " <bits>]: CRC bits (default=%" PRIu32 ")\n"
       "\t[--" CMD_RANDOM_SEED " <seed>]: random seed (default set by DPDK)\n"
-      "\t[--" CMD_MARK_WARMUP_PKTS "]: mark warmup packets with a custom transport protocol (0x%x) "
-      "(default=%d)\n"
+      "\t[--" CMD_MARK_WARMUP_PKTS "]: mark warmup packets with a custom transport protocol (0x%x) (default=%d)\n"
       "\t[--" CMD_DUMP_FLOWS_TO_FILE "]: dump flows to pcap file (default=%d)\n"
       "\t[--" CMD_KVS_MODE "]: enable KVS mode (default=%d)\n"
+      "\t[--" CMD_KVS_GET_RATIO " <ratio>]: KVS get ratio (default=%.2f)\n"
       "\t[--" CMD_TRAFFIC_DISTRIBUTION " <dist>]: traffic distribution (default=%s)\n"
       "\t[--" CMD_ZIPF_PARAM " <param>]: Zipf parameter (default=%.2f)\n",
       argv[0], DEFAULT_TOTAL_FLOWS, DEFAULT_PKT_SIZE, DEFAULT_CRC_UNIQUE_FLOWS ? "true" : "false", DEFAULT_CRC_BITS, WARMUP_PROTO_ID,
-      DEFAULT_MARK_WARMUP_PKTS, DEFAULT_DUMP_FLOWS_TO_FILE, DEFAULT_KVS_MODE, default_traffic_dist_str, DEFAULT_ZIPF_PARAM);
+      DEFAULT_MARK_WARMUP_PKTS, DEFAULT_DUMP_FLOWS_TO_FILE, DEFAULT_KVS_MODE, DEFAULT_KVS_GET_RATIO, default_traffic_dist_str,
+      DEFAULT_ZIPF_PARAM);
 }
 
 static uintmax_t parse_int(const char *str, const char *name, int base) {
@@ -163,6 +168,7 @@ void config_init(int argc, char **argv) {
   config.mark_warmup_packets = DEFAULT_MARK_WARMUP_PKTS;
   config.dump_flows_to_file  = DEFAULT_DUMP_FLOWS_TO_FILE;
   config.kvs_mode            = DEFAULT_KVS_MODE;
+  config.kvs_get_ratio       = DEFAULT_KVS_GET_RATIO;
   config.rx.port             = 0;
   config.tx.port             = 1;
   config.tx.num_cores        = 1;
@@ -266,6 +272,11 @@ void config_init(int argc, char **argv) {
     case CMD_KVS_MODE_NUM: {
       config.kvs_mode = true;
     } break;
+    case CMD_KVS_GET_RATIO_NUM: {
+      config.kvs_get_ratio = parse_double(optarg, CMD_KVS_GET_RATIO);
+      PARSER_ASSERT(config.kvs_get_ratio >= 0.0 && config.kvs_get_ratio <= 1.0,
+                    "KVS get ratio must be in the interval [0.0-1.0] (requested %.2f).\n", config.kvs_get_ratio);
+    } break;
     default:
       rte_exit(EXIT_FAILURE, "Unknown option %c\n", opt);
     }
@@ -336,5 +347,6 @@ void config_print() {
   LOG("Mark warmup pkts: %d", config.mark_warmup_packets);
   LOG("Dump flows:       %d", config.dump_flows_to_file);
   LOG("KVS mode:         %d", config.kvs_mode);
+  LOG("KVS get ratio:    %.2f", config.kvs_get_ratio);
   LOG("------------------\n");
 }
