@@ -275,7 +275,7 @@ void config_init(int argc, char **argv) {
     case CMD_KVS_GET_RATIO_NUM: {
       config.kvs_get_ratio = parse_double(optarg, CMD_KVS_GET_RATIO);
       PARSER_ASSERT(config.kvs_get_ratio >= 0.0 && config.kvs_get_ratio <= 1.0,
-                    "KVS get ratio must be in the interval [0.0-1.0] (requested %.2f).\n", config.kvs_get_ratio);
+                    "KVS get ratio must be in the interval [0.0-1.0] (requested %lf).\n", config.kvs_get_ratio);
     } break;
     default:
       rte_exit(EXIT_FAILURE, "Unknown option %c\n", opt);
@@ -338,7 +338,7 @@ void config_print() {
   LOG("Random seed:      %" PRIu64 "", config.seed);
   LOG("Flows:            %" PRIu16 "", config.num_flows);
   LOG("Traffic dist:     %s", traffic_dist_str);
-  LOG("Zipf param:       %.2f", config.zipf_param);
+  LOG("Zipf param:       %lf", config.zipf_param);
   LOG("Flows CRC unique: %s", config.crc_unique_flows ? "true" : "false");
   LOG("CRC bits:         %" PRIu32 "", config.crc_bits);
   LOG("Expiration time:  %" PRIu64 " us", config.exp_time / 1000);
@@ -347,6 +347,6 @@ void config_print() {
   LOG("Mark warmup pkts: %d", config.mark_warmup_packets);
   LOG("Dump flows:       %d", config.dump_flows_to_file);
   LOG("KVS mode:         %d", config.kvs_mode);
-  LOG("KVS get ratio:    %.2f", config.kvs_get_ratio);
+  LOG("KVS get ratio:    %lf", config.kvs_get_ratio);
   LOG("------------------\n");
 }
