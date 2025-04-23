@@ -6,7 +6,7 @@ SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
 
 PATHSFILE=$SCRIPT_DIR/paths.sh
 PYTHON_ENV_DIR=$SCRIPT_DIR/env
-DPDK_VERSION="22.11.4"
+DPDK_VERSION="24.07"
 RTE_TARGET=x86_64-native-linux-gcc
 
 DEPS_DIR=$SCRIPT_DIR/deps
@@ -78,7 +78,7 @@ install_dpdk() {
       DPDK_TAR="dpdk-$DPDK_VERSION.tar.xz"
       wget https://fast.dpdk.org/rel/$DPDK_TAR
       tar xJf $DPDK_TAR && rm $DPDK_TAR
-      mv dpdk-stable-$DPDK_VERSION $DPDK_DIR
+      mv dpdk-$DPDK_VERSION $DPDK_DIR
     popd
   fi
 
