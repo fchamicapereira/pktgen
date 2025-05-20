@@ -8,6 +8,9 @@
 #include "log.h"
 #include "pktgen.h"
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 #define CMD_HELP "help"
 #define CMD_TEST "test"
 #define CMD_TOTAL_FLOWS "total-flows"
@@ -309,7 +312,7 @@ void config_init(int argc, char **argv) {
       WARNING("Overriding packet size to %" PRIu64 " bytes.", KVS_PKT_SIZE_BYTES);
       WARNING("*************************************************************************");
     }
-    config.pkt_size = KVS_PKT_SIZE_BYTES;
+    config.pkt_size = MAX(KVS_PKT_SIZE_BYTES, MIN_PKT_SIZE);
   }
 
   unsigned idx = 0;
