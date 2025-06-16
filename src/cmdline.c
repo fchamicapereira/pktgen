@@ -47,6 +47,7 @@ INIT_PARAMETERLESS_COMMAND(cmd_stop_token_cmd, cmd, "stop");
 INIT_PARAMETERLESS_COMMAND(cmd_stats_token_cmd, cmd, "stats");
 INIT_PARAMETERLESS_COMMAND(cmd_stats_reset_token_cmd, cmd, "reset");
 INIT_PARAMETERLESS_COMMAND(cmd_flows_token_cmd, cmd, "flows");
+INIT_PARAMETERLESS_COMMAND(cmd_dist_token_cmd, cmd, "dist");
 
 /* Commands taking just an int */
 INIT_INT_COMMAND(cmd_rate_token_cmd, cmd, "rate")
@@ -164,6 +165,10 @@ static void cmd_flows_callback(__rte_unused void *ptr_params, __rte_unused struc
   cmd_flows_display();
 }
 
+static void cmd_dist_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
+  cmd_dist_display();
+}
+
 static void cmd_stats_reset_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
   cmd_stats_reset();
 }
@@ -233,6 +238,14 @@ cmd_flows_cmd = {
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
+cmd_dist_cmd = {
+    .f        = cmd_dist_callback,
+    .data     = NULL,
+    .help_str = "dist\n     Show flow distribution",
+    .tokens   = {(void *)&cmd_dist_token_cmd, NULL},
+};
+
+CMDLINE_PARSE_INT_NTOKENS(1)
 cmd_stats_reset_cmd = {
     .f        = cmd_stats_reset_callback,
     .data     = NULL,
@@ -273,17 +286,10 @@ cmd_warmup_cmd = {
 };
 
 cmdline_parse_ctx_t list_prompt_commands[] = {
-    (cmdline_parse_inst_t *)&cmd_quit_cmd,
-    (cmdline_parse_inst_t *)&cmd_start_cmd,
-    (cmdline_parse_inst_t *)&cmd_stop_cmd,
-    (cmdline_parse_inst_t *)&cmd_stats_cmd,
-    (cmdline_parse_inst_t *)&cmd_stats_reset_cmd,
-    (cmdline_parse_inst_t *)&cmd_flows_cmd,
-    (cmdline_parse_inst_t *)&cmd_rate_cmd,
-    (cmdline_parse_inst_t *)&cmd_churn_cmd,
-    (cmdline_parse_inst_t *)&cmd_run_cmd,
-    (cmdline_parse_inst_t *)&cmd_warmup_cmd,
-    NULL,
+    (cmdline_parse_inst_t *)&cmd_quit_cmd,  (cmdline_parse_inst_t *)&cmd_start_cmd,       (cmdline_parse_inst_t *)&cmd_stop_cmd,
+    (cmdline_parse_inst_t *)&cmd_stats_cmd, (cmdline_parse_inst_t *)&cmd_stats_reset_cmd, (cmdline_parse_inst_t *)&cmd_flows_cmd,
+    (cmdline_parse_inst_t *)&cmd_dist_cmd,  (cmdline_parse_inst_t *)&cmd_rate_cmd,        (cmdline_parse_inst_t *)&cmd_churn_cmd,
+    (cmdline_parse_inst_t *)&cmd_run_cmd,   (cmdline_parse_inst_t *)&cmd_warmup_cmd,      NULL,
 };
 
 void cmdline_start() {

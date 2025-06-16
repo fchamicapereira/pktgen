@@ -8,12 +8,15 @@
 #include <vector>
 #include <iomanip>
 #include <cmath>
+#include <unordered_map>
+#include <algorithm>
 
 #include "log.h"
 #include "pktgen.h"
 #include "random.h"
 
 std::vector<flow_t> flows;
+std::vector<uint32_t> flow_idx_seq;
 
 static flow_t generate_random_flow() {
   flow_t flow;
@@ -110,7 +113,6 @@ std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
   const size_t num_base_flows = config.num_flows / 2;
 
   LOG("Generating distribution of flow indexes...");
-  std::vector<uint32_t> flow_idx_seq;
   switch (config.dist) {
   case UNIFORM:
     flow_idx_seq = generate_uniform_flow_idx_sequence(num_base_flows);
@@ -173,6 +175,49 @@ void cmd_flows_display() {
 
   for (const flow_t &flow : flows) {
     LOG("%s", flow_to_string(flow).c_str());
+  }
+}
+
+void cmd_dist_display() {
+  LOG();
+  LOG("~~~~~~ Traffic distribution ~~~~~~");
+
+  std::unordered_map<uint32_t, uint64_t> flow_idx_seq_count(config.num_flows);
+  uint64_t total_count = 0;
+
+  for (uint32_t flow_idx : flow_idx_seq) {
+    if (flow_idx_seq_count.find(flow_idx) == flow_idx_seq_count.end()) {
+      flow_idx_seq_count[flow_idx] = 0;
+    }
+    flow_idx_seq_count[flow_idx]++;
+    total_count++;
+  }
+
+  // Sort by count
+  std::vector<uint64_t> counts(flow_idx_seq_count.size());
+  for (const auto &pair : flow_idx_seq_count) {
+    counts[pair.first] = pair.second;
+  }
+  std::sort(counts.begin(), counts.end(), std::greater<uint64_t>());
+
+  // Build a CDF
+  std::vector<double> cdf;
+  double cumulative_count = 0.0;
+  for (const auto &count : counts) {
+    cumulative_count += count;
+    cdf.push_back(cumulative_count / total_count);
+  }
+
+  // Showing the CDF in 10% increments
+  double last_cdf_value = 0.0;
+  for (size_t i = 0; i < cdf.size(); i++) {
+    if (i == 0 || cdf[i] >= last_cdf_value + 0.1 || i == cdf.size() - 1) {
+      const uint32_t flows          = i + 1;
+      const double flows_percentage = (static_cast<double>(flows) / (config.num_flows / 2)) * 100.0;
+      const double cdf_value        = cdf[i];
+      LOG("%8u %7.2f%% : %7.2f%%", flows, flows_percentage, cdf_value * 100.0);
+      last_cdf_value = cdf_value;
+    }
   }
 }
 
