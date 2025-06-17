@@ -359,8 +359,9 @@ static int tx_worker_main(void *arg) {
   ticks_t elapsed_ticks      = 0;
   uint32_t mbuf_burst_offset = 0;
 
-  bytes_t total_pkt_size = 0;
-  uint64_t num_total_tx  = 0;
+  bytes_t total_pkt_size    = 0;
+  uint64_t num_total_tx     = 0;
+  uint64_t flow_idx_counter = 0;
 
   ticks_t flow_ticks            = worker_config->runtime->flow_ttl * clock_scale() / 1000;
   ticks_t flow_ticks_offset_inc = flow_ticks / num_base_flows;
@@ -413,7 +414,7 @@ static int tx_worker_main(void *arg) {
       total_pkt_size += mbuf->pkt_len;
       byte_t *pkt = rte_pktmbuf_mtod(mbuf, byte_t *);
 
-      const uint32_t flow_idx   = worker_config->flow_idx_seq[(mbuf_burst_offset + i) % flow_idx_seq_size];
+      const uint32_t flow_idx   = worker_config->flow_idx_seq[(flow_idx_counter + i) % flow_idx_seq_size];
       uint8_t &chosen_flows_idx = chosen_flows_idxs[flow_idx];
       ticks_t &flow_timer       = flows_timers[flow_idx];
 
@@ -437,6 +438,7 @@ static int tx_worker_main(void *arg) {
     uint16_t num_tx = rte_eth_tx_burst(config.tx.port, queue_id, mbuf_burst, BURST_SIZE);
 
     num_total_tx += num_tx;
+    flow_idx_counter = (flow_idx_counter + BURST_SIZE) % flow_idx_seq_size;
 
     while ((period_start_tick = now()) < period_end_tick) {
       // prevent the compiler from removing this loop
