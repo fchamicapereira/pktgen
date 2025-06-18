@@ -70,14 +70,22 @@ struct flow_comp_t {
 };
 
 void generate_unique_flows() {
-  flows = std::vector<flow_t>(config.num_flows);
+  flows.resize(config.num_flows);
+
+  LOG("Generating %u flows...", config.num_flows);
+
+  // Super fast
+  if (!config.crc_unique_flows && !config.force_unique_flows) {
+    for (flow_t &flow : flows) {
+      flow = generate_random_flow();
+    }
+    return;
+  }
 
   std::unordered_set<flow_t, flow_hash_t, flow_comp_t> flows_set;
   std::unordered_set<crc32_t> flows_crc;
 
   const uint32_t crc_mask = (uint32_t)((1 << (uint64_t)(config.crc_bits)) - 1);
-
-  LOG("Generating %u flows...", config.num_flows);
 
   while (flows_set.size() != config.num_flows) {
     const flow_t flow = generate_random_flow();

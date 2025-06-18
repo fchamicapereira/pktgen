@@ -19,6 +19,7 @@
 #define CMD_RX_PORT "rx"
 #define CMD_NUM_TX_CORES "tx-cores"
 #define CMD_EXP_TIME "exp-time"
+#define CMD_UNIQUE_FLOWS "unique-flows"
 #define CMD_CRC_UNIQUE_FLOWS "crc-unique-flows"
 #define CMD_CRC_BITS "crc-bits"
 #define CMD_RANDOM_SEED "seed"
@@ -33,6 +34,7 @@
 #define TRAFFIC_DISTRIBUTION_ZIPF "zipf"
 
 #define DEFAULT_PKT_SIZE MIN_PKT_SIZE
+#define DEFAULT_UNIQUE_FLOWS false
 #define DEFAULT_CRC_UNIQUE_FLOWS false
 #define DEFAULT_TOTAL_FLOWS 10000
 #define DEFAULT_CRC_BITS 32
@@ -57,6 +59,7 @@ enum {
   CMD_RX_PORT_NUM,
   CMD_NUM_TX_CORES_NUM,
   CMD_EXP_TIME_NUM,
+  CMD_UNIQUE_FLOWS_NUM,
   CMD_CRC_UNIQUE_FLOWS_NUM,
   CMD_CRC_BITS_NUM,
   CMD_RANDOM_SEED_NUM,
@@ -79,6 +82,7 @@ static const struct option long_options[] = {{CMD_HELP, no_argument, NULL, CMD_H
                                              {CMD_RX_PORT, required_argument, NULL, CMD_RX_PORT_NUM},
                                              {CMD_NUM_TX_CORES, required_argument, NULL, CMD_NUM_TX_CORES_NUM},
                                              {CMD_EXP_TIME, required_argument, NULL, CMD_EXP_TIME_NUM},
+                                             {CMD_UNIQUE_FLOWS, no_argument, NULL, CMD_UNIQUE_FLOWS_NUM},
                                              {CMD_CRC_UNIQUE_FLOWS, no_argument, NULL, CMD_CRC_UNIQUE_FLOWS_NUM},
                                              {CMD_CRC_BITS, required_argument, NULL, CMD_CRC_BITS_NUM},
                                              {CMD_RANDOM_SEED, required_argument, NULL, CMD_RANDOM_SEED_NUM},
@@ -111,6 +115,7 @@ void config_print_usage(char **argv) {
       "\t--" CMD_RX_PORT " <port>: RX port\n"
       "\t--" CMD_NUM_TX_CORES " <#cores>: Number of TX cores\n"
       "\t--" CMD_EXP_TIME " <time>: Flow expiration time (in us)\n"
+      "\t[--" CMD_UNIQUE_FLOWS "]: Flows are unique (default=%s)\n"
       "\t[--" CMD_CRC_UNIQUE_FLOWS "]: Flows are CRC unique (default=%s)\n"
       "\t[--" CMD_CRC_BITS " <bits>]: CRC bits (default=%" PRIu32 ")\n"
       "\t[--" CMD_RANDOM_SEED " <seed>]: random seed (default set by DPDK)\n"
@@ -120,9 +125,9 @@ void config_print_usage(char **argv) {
       "\t[--" CMD_KVS_GET_RATIO " <ratio>]: KVS get ratio (default=%.2f)\n"
       "\t[--" CMD_TRAFFIC_DISTRIBUTION " <dist>]: traffic distribution (default=%s)\n"
       "\t[--" CMD_ZIPF_PARAM " <param>]: Zipf parameter (default=%.2f)\n",
-      argv[0], DEFAULT_TOTAL_FLOWS, DEFAULT_PKT_SIZE, DEFAULT_CRC_UNIQUE_FLOWS ? "true" : "false", DEFAULT_CRC_BITS, WARMUP_PROTO_ID,
-      DEFAULT_MARK_WARMUP_PKTS, DEFAULT_DUMP_FLOWS_TO_FILE, DEFAULT_KVS_MODE, DEFAULT_KVS_GET_RATIO, default_traffic_dist_str,
-      DEFAULT_ZIPF_PARAM);
+      argv[0], DEFAULT_TOTAL_FLOWS, DEFAULT_PKT_SIZE, DEFAULT_UNIQUE_FLOWS ? "true" : "false", DEFAULT_CRC_UNIQUE_FLOWS ? "true" : "false",
+      DEFAULT_CRC_BITS, WARMUP_PROTO_ID, DEFAULT_MARK_WARMUP_PKTS, DEFAULT_DUMP_FLOWS_TO_FILE, DEFAULT_KVS_MODE, DEFAULT_KVS_GET_RATIO,
+      default_traffic_dist_str, DEFAULT_ZIPF_PARAM);
 }
 
 static uintmax_t parse_int(const char *str, const char *name, int base) {
@@ -159,9 +164,10 @@ void config_init(int argc, char **argv) {
   config.seed                = time(NULL);
   config.test_and_exit       = false;
   config.num_flows           = DEFAULT_TOTAL_FLOWS;
-  config.crc_unique_flows    = DEFAULT_CRC_UNIQUE_FLOWS;
   config.dist                = DEFAULT_TRAFFIC_DISTRIBUTION;
   config.zipf_param          = DEFAULT_ZIPF_PARAM;
+  config.force_unique_flows  = DEFAULT_UNIQUE_FLOWS;
+  config.crc_unique_flows    = DEFAULT_CRC_UNIQUE_FLOWS;
   config.crc_bits            = DEFAULT_CRC_BITS;
   config.exp_time            = 0;
   config.pkt_size            = DEFAULT_PKT_SIZE;
@@ -228,6 +234,9 @@ void config_init(int argc, char **argv) {
     case CMD_ZIPF_PARAM_NUM: {
       config.zipf_param = parse_double(optarg, CMD_ZIPF_PARAM);
       PARSER_ASSERT(!(config.zipf_param < 0), "Zipf parameter must be >= 0 (requested %.2f).\n", config.zipf_param);
+    } break;
+    case CMD_UNIQUE_FLOWS_NUM: {
+      config.force_unique_flows = true;
     } break;
     case CMD_CRC_UNIQUE_FLOWS_NUM: {
       config.crc_unique_flows = true;
@@ -342,7 +351,8 @@ void config_print() {
   LOG("Flows:            %" PRIu16 "", config.num_flows);
   LOG("Traffic dist:     %s", traffic_dist_str);
   LOG("Zipf param:       %lf", config.zipf_param);
-  LOG("Flows CRC unique: %s", config.crc_unique_flows ? "true" : "false");
+  LOG("Unique flows:     %s", config.force_unique_flows ? "true" : "false");
+  LOG("CRC unique flows: %s", config.crc_unique_flows ? "true" : "false");
   LOG("CRC bits:         %" PRIu32 "", config.crc_bits);
   LOG("Expiration time:  %" PRIu64 " us", config.exp_time / 1000);
   LOG("Packet size:      %" PRIu64 " bytes", config.pkt_size);

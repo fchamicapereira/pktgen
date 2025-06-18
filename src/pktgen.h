@@ -114,6 +114,7 @@ struct config_t {
   uint32_t num_flows;
   enum traffic_dist_t dist;
   double zipf_param;
+  bool force_unique_flows;
   bool crc_unique_flows;
   uint32_t crc_bits;
   time_ns_t exp_time;
