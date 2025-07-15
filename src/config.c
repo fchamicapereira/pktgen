@@ -18,10 +18,7 @@
 #define CMD_TX_PORT "tx"
 #define CMD_RX_PORT "rx"
 #define CMD_NUM_TX_CORES "tx-cores"
-#define CMD_EXP_TIME "exp-time"
 #define CMD_UNIQUE_FLOWS "unique-flows"
-#define CMD_CRC_UNIQUE_FLOWS "crc-unique-flows"
-#define CMD_CRC_BITS "crc-bits"
 #define CMD_RANDOM_SEED "seed"
 #define CMD_MARK_WARMUP_PKTS "mark-warmup-packets"
 #define CMD_DUMP_FLOWS_TO_FILE "dump-flows-to-file"
@@ -35,9 +32,7 @@
 
 #define DEFAULT_PKT_SIZE MIN_PKT_SIZE
 #define DEFAULT_UNIQUE_FLOWS false
-#define DEFAULT_CRC_UNIQUE_FLOWS false
 #define DEFAULT_TOTAL_FLOWS 10000
-#define DEFAULT_CRC_BITS 32
 #define DEFAULT_WARMUP_DURATION 0 // No warmup
 #define DEFAULT_WARMUP_RATE 1     // 1 Mbps
 #define DEFAULT_MARK_WARMUP_PKTS false
@@ -58,10 +53,7 @@ enum {
   CMD_TX_PORT_NUM,
   CMD_RX_PORT_NUM,
   CMD_NUM_TX_CORES_NUM,
-  CMD_EXP_TIME_NUM,
   CMD_UNIQUE_FLOWS_NUM,
-  CMD_CRC_UNIQUE_FLOWS_NUM,
-  CMD_CRC_BITS_NUM,
   CMD_RANDOM_SEED_NUM,
   CMD_MARK_WARMUP_PKTS_NUM,
   CMD_DUMP_FLOWS_TO_FILE_NUM,
@@ -81,10 +73,7 @@ static const struct option long_options[] = {{CMD_HELP, no_argument, NULL, CMD_H
                                              {CMD_TX_PORT, required_argument, NULL, CMD_TX_PORT_NUM},
                                              {CMD_RX_PORT, required_argument, NULL, CMD_RX_PORT_NUM},
                                              {CMD_NUM_TX_CORES, required_argument, NULL, CMD_NUM_TX_CORES_NUM},
-                                             {CMD_EXP_TIME, required_argument, NULL, CMD_EXP_TIME_NUM},
                                              {CMD_UNIQUE_FLOWS, no_argument, NULL, CMD_UNIQUE_FLOWS_NUM},
-                                             {CMD_CRC_UNIQUE_FLOWS, no_argument, NULL, CMD_CRC_UNIQUE_FLOWS_NUM},
-                                             {CMD_CRC_BITS, required_argument, NULL, CMD_CRC_BITS_NUM},
                                              {CMD_RANDOM_SEED, required_argument, NULL, CMD_RANDOM_SEED_NUM},
                                              {CMD_MARK_WARMUP_PKTS, no_argument, NULL, CMD_MARK_WARMUP_PKTS_NUM},
                                              {CMD_DUMP_FLOWS_TO_FILE, no_argument, NULL, CMD_DUMP_FLOWS_TO_FILE_NUM},
@@ -114,20 +103,17 @@ void config_print_usage(char **argv) {
       "\t--" CMD_TX_PORT " <port>: TX port\n"
       "\t--" CMD_RX_PORT " <port>: RX port\n"
       "\t--" CMD_NUM_TX_CORES " <#cores>: Number of TX cores\n"
-      "\t--" CMD_EXP_TIME " <time>: Flow expiration time (in us)\n"
       "\t[--" CMD_UNIQUE_FLOWS "]: Flows are unique (default=%s)\n"
-      "\t[--" CMD_CRC_UNIQUE_FLOWS "]: Flows are CRC unique (default=%s)\n"
-      "\t[--" CMD_CRC_BITS " <bits>]: CRC bits (default=%" PRIu32 ")\n"
       "\t[--" CMD_RANDOM_SEED " <seed>]: random seed (default set by DPDK)\n"
-      "\t[--" CMD_MARK_WARMUP_PKTS "]: mark warmup packets with a custom transport protocol (0x%x) (default=%d)\n"
-      "\t[--" CMD_DUMP_FLOWS_TO_FILE "]: dump flows to pcap file (default=%d)\n"
-      "\t[--" CMD_KVS_MODE "]: enable KVS mode (default=%d)\n"
+      "\t[--" CMD_MARK_WARMUP_PKTS "]: mark warmup packets with a custom transport protocol (0x%x) (default=%s)\n"
+      "\t[--" CMD_DUMP_FLOWS_TO_FILE "]: dump flows to pcap file (default=%s)\n"
+      "\t[--" CMD_KVS_MODE "]: enable KVS mode (default=%s)\n"
       "\t[--" CMD_KVS_GET_RATIO " <ratio>]: KVS get ratio (default=%.2f)\n"
       "\t[--" CMD_TRAFFIC_DISTRIBUTION " <dist>]: traffic distribution (default=%s)\n"
       "\t[--" CMD_ZIPF_PARAM " <param>]: Zipf parameter (default=%.2f)\n",
-      argv[0], DEFAULT_TOTAL_FLOWS, DEFAULT_PKT_SIZE, DEFAULT_UNIQUE_FLOWS ? "true" : "false", DEFAULT_CRC_UNIQUE_FLOWS ? "true" : "false",
-      DEFAULT_CRC_BITS, WARMUP_PROTO_ID, DEFAULT_MARK_WARMUP_PKTS, DEFAULT_DUMP_FLOWS_TO_FILE, DEFAULT_KVS_MODE, DEFAULT_KVS_GET_RATIO,
-      default_traffic_dist_str, DEFAULT_ZIPF_PARAM);
+      argv[0], DEFAULT_TOTAL_FLOWS, DEFAULT_PKT_SIZE, DEFAULT_UNIQUE_FLOWS ? "true" : "false", WARMUP_PROTO_ID,
+      DEFAULT_MARK_WARMUP_PKTS ? "true" : "false", DEFAULT_DUMP_FLOWS_TO_FILE ? "true" : "false", DEFAULT_KVS_MODE ? "true" : "false",
+      DEFAULT_KVS_GET_RATIO, default_traffic_dist_str, DEFAULT_ZIPF_PARAM);
 }
 
 static uintmax_t parse_int(const char *str, const char *name, int base) {
@@ -167,9 +153,6 @@ void config_init(int argc, char **argv) {
   config.dist                = DEFAULT_TRAFFIC_DISTRIBUTION;
   config.zipf_param          = DEFAULT_ZIPF_PARAM;
   config.force_unique_flows  = DEFAULT_UNIQUE_FLOWS;
-  config.crc_unique_flows    = DEFAULT_CRC_UNIQUE_FLOWS;
-  config.crc_bits            = DEFAULT_CRC_BITS;
-  config.exp_time            = 0;
   config.pkt_size            = DEFAULT_PKT_SIZE;
   config.warmup_duration     = DEFAULT_WARMUP_DURATION;
   config.warmup_rate         = DEFAULT_WARMUP_RATE;
@@ -216,11 +199,8 @@ void config_init(int argc, char **argv) {
     } break;
     case CMD_TOTAL_FLOWS_NUM: {
       config.num_flows = parse_int(optarg, CMD_TOTAL_FLOWS, 10);
-
       PARSER_ASSERT(config.num_flows >= MIN_FLOWS_NUM, "Number of flows must be >= %" PRIu32 " (requested %" PRIu32 ").\n", MIN_FLOWS_NUM,
                     config.num_flows);
-
-      PARSER_ASSERT(config.num_flows % 2 == 0, "Number of flows must be even (requested %" PRIu32 ").\n", config.num_flows);
     } break;
     case CMD_TRAFFIC_DISTRIBUTION_NUM: {
       if (strcmp(optarg, TRAFFIC_DISTRIBUTION_UNIFORM) == 0) {
@@ -237,19 +217,6 @@ void config_init(int argc, char **argv) {
     } break;
     case CMD_UNIQUE_FLOWS_NUM: {
       config.force_unique_flows = true;
-    } break;
-    case CMD_CRC_UNIQUE_FLOWS_NUM: {
-      config.crc_unique_flows = true;
-    } break;
-    case CMD_CRC_BITS_NUM: {
-      config.crc_bits = parse_int(optarg, CMD_TOTAL_FLOWS, 10);
-      PARSER_ASSERT(config.crc_bits >= MIN_CRC_BITS && config.crc_bits <= MAX_CRC_BITS,
-                    "CRC bits must be in the interval [%" PRIu32 "-%" PRIu32 "] (requested %" PRIu32 ").\n", MIN_CRC_BITS, MAX_CRC_BITS,
-                    config.crc_bits);
-    } break;
-    case CMD_EXP_TIME_NUM: {
-      time_us_t exp_time = parse_int(optarg, CMD_EXP_TIME, 10);
-      config.exp_time    = 1000 * exp_time;
     } break;
     case CMD_PKT_SIZE_NUM: {
       config.pkt_size = parse_int(optarg, CMD_PKT_SIZE, 10);
@@ -296,22 +263,11 @@ void config_init(int argc, char **argv) {
 
   rte_srand(config.seed);
 
-  PARSER_ASSERT(!config.crc_unique_flows || (config.num_flows <= (uint32_t)(1 << config.crc_bits)),
-                "Not enough CRC bits for the requested number of flows (flows=%" PRIu32 ", crc bits=%" PRIu32 ", max flows=%" PRIu32 ").\n",
-                config.num_flows, config.crc_bits, 1 << config.crc_bits);
-
   PARSER_ASSERT(config.tx.num_cores < nb_cores, "Insufficient number of cores (main=1, tx=%" PRIu16 ", available=%" PRIu16 ").\n",
                 config.tx.num_cores, nb_cores);
 
-  PARSER_ASSERT((config.num_flows / 2) >= config.tx.num_cores,
-                "Too many cores (%" PRIu16 ") for the requested number of flows (%" PRIu32 "). Use at most half the number of flows.\n",
+  PARSER_ASSERT(config.num_flows >= config.tx.num_cores, "Too many cores (%" PRIu16 ") for the requested number of flows (%" PRIu32 ").\n",
                 config.tx.num_cores, config.num_flows);
-
-  if (config.exp_time > 0) {
-    config.max_churn = ((double)(60.0 * config.num_flows)) / NS_TO_S(MIN_CHURN_ACTION_TIME_MULTIPLIER * config.exp_time);
-  } else {
-    config.max_churn = 0;
-  }
 
   if (config.kvs_mode) {
     if (custom_pkt_size) {
@@ -352,11 +308,7 @@ void config_print() {
   LOG("Traffic dist:     %s", traffic_dist_str);
   LOG("Zipf param:       %lf", config.zipf_param);
   LOG("Unique flows:     %s", config.force_unique_flows ? "true" : "false");
-  LOG("CRC unique flows: %s", config.crc_unique_flows ? "true" : "false");
-  LOG("CRC bits:         %" PRIu32 "", config.crc_bits);
-  LOG("Expiration time:  %" PRIu64 " us", config.exp_time / 1000);
   LOG("Packet size:      %" PRIu64 " bytes", config.pkt_size);
-  LOG("Max churn:        %" PRIu64 " fpm", config.max_churn);
   LOG("Mark warmup pkts: %d", config.mark_warmup_packets);
   LOG("Dump flows:       %d", config.dump_flows_to_file);
   LOG("KVS mode:         %d", config.kvs_mode);

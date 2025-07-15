@@ -79,15 +79,6 @@ void cmd_rate(rate_gbps_t rate) {
 }
 
 void cmd_churn(churn_fpm_t churn) {
-  if (churn > config.max_churn) {
-    WARNING("*************************************************************************");
-    WARNING("Invalid churn value (requested %" PRIu64 " is bigger than max %" PRIu64 " fpm). Ignoring request.", churn, config.max_churn);
-    WARNING("*************************************************************************");
-    return;
-  }
-
-  uint32_t num_base_flows = config.num_flows / 2;
-
   if (churn == 0) {
     config.runtime.flow_ttl = 0;
     signal_new_config();
@@ -97,14 +88,7 @@ void cmd_churn(churn_fpm_t churn) {
   double churn_fps = (double)churn / 60;
   assert(churn_fps != 0);
 
-  time_ns_t flow_ttl = (1e9 * (uint64_t)num_base_flows) / churn_fps;
-
-  if (flow_ttl < config.exp_time) {
-    WARNING("*************************************************************************");
-    WARNING("Flow TTL (%" PRIu64 "ns) is smaller than the expiration time (%" PRIu64 "ns). Ignoring request.", flow_ttl, config.exp_time);
-    WARNING("*************************************************************************");
-    return;
-  }
+  time_ns_t flow_ttl = (1e9 * (uint64_t)config.num_flows) / churn_fps;
 
   LOG_DEBUG("Flow TTL = %" PRIu64 "ns", flow_ttl);
 

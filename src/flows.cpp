@@ -69,13 +69,13 @@ struct flow_comp_t {
   };
 };
 
-void generate_unique_flows() {
+void generate_flows() {
   flows.resize(config.num_flows);
 
   LOG("Generating %u flows...", config.num_flows);
 
   // Super fast
-  if (!config.crc_unique_flows && !config.force_unique_flows) {
+  if (!config.force_unique_flows) {
     for (flow_t &flow : flows) {
       flow = generate_random_flow();
     }
@@ -83,10 +83,6 @@ void generate_unique_flows() {
   }
 
   std::unordered_set<flow_t, flow_hash_t, flow_comp_t> flows_set;
-  std::unordered_set<crc32_t> flows_crc;
-
-  const uint32_t crc_mask = (uint32_t)((1 << (uint64_t)(config.crc_bits)) - 1);
-
   while (flows_set.size() != config.num_flows) {
     const flow_t flow = generate_random_flow();
 
@@ -95,38 +91,27 @@ void generate_unique_flows() {
       continue;
     }
 
-    if (config.crc_unique_flows) {
-      const int len     = config.kvs_mode ? sizeof(flow.kvs_key) + sizeof(flow.kvs_value)
-                                          : sizeof(flow.src_ip) + sizeof(flow.dst_ip) + sizeof(flow.src_port) + sizeof(flow.dst_port);
-      const crc32_t crc = calculate_crc32((byte_t *)&flow, len) & crc_mask;
-
-      // Although the flow is unique, its masked CRC is not.
-      if (flows_crc.find(crc) != flows_crc.end()) {
-        continue;
-      }
-
-      // We're good.
-      flows_crc.insert(crc);
-    }
-
     const size_t idx = flows_set.size();
     flows[idx]       = flow;
     flows_set.insert(flow);
   }
 }
 
+void randomize_flow(uint32_t flow_idx) {
+  assert(flow_idx < flows.size() && "Invalid flow index");
+  flows[flow_idx] = generate_random_flow();
+}
+
 const std::vector<flow_t> &get_generated_flows() { return flows; }
 
 std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
-  const size_t num_base_flows = config.num_flows / 2;
-
   LOG("Generating distribution of flow indexes...");
   switch (config.dist) {
   case UNIFORM:
-    flow_idx_seq = generate_uniform_flow_idx_sequence(num_base_flows);
+    flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
     break;
   case ZIPF:
-    flow_idx_seq = generate_zipf_flow_idx_sequence(num_base_flows, config.zipf_param);
+    flow_idx_seq = generate_zipf_flow_idx_sequence(config.num_flows, config.zipf_param);
     break;
   }
 
@@ -255,8 +240,7 @@ static struct kvs_ratio_t calculate_kvs_ratio() {
 }
 
 std::vector<std::vector<enum kvs_op>> generate_kvs_ops_per_flow() {
-  const size_t num_base_flows = config.num_flows / 2;
-  std::vector<std::vector<enum kvs_op>> kvs_ops_per_flow(num_base_flows);
+  std::vector<std::vector<enum kvs_op>> kvs_ops_per_flow(config.num_flows);
 
   const struct kvs_ratio_t ratio = calculate_kvs_ratio();
 

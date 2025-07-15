@@ -115,9 +115,6 @@ struct config_t {
   enum traffic_dist_t dist;
   double zipf_param;
   bool force_unique_flows;
-  bool crc_unique_flows;
-  uint32_t crc_bits;
-  time_ns_t exp_time;
   bytes_t pkt_size;
 
   time_s_t warmup_duration;
@@ -127,7 +124,6 @@ struct config_t {
   bool kvs_mode;
   double kvs_get_ratio;
 
-  churn_fpm_t max_churn;
   rate_gbps_t rate;
 
   struct {
