@@ -245,11 +245,11 @@ std::vector<std::vector<enum kvs_op>> generate_kvs_ops_per_flow() {
   const struct kvs_ratio_t ratio = calculate_kvs_ratio();
 
   for (size_t flow_idx = 0; flow_idx < kvs_ops_per_flow.size(); flow_idx++) {
-    for (uint64_t i = 0; i < ratio.get; i++) {
-      kvs_ops_per_flow[flow_idx].push_back(KVS_OP_GET);
-    }
     for (uint64_t i = 0; i < ratio.put; i++) {
       kvs_ops_per_flow[flow_idx].push_back(KVS_OP_PUT);
+    }
+    for (uint64_t i = 0; i < ratio.get; i++) {
+      kvs_ops_per_flow[flow_idx].push_back(KVS_OP_GET);
     }
   }
 
