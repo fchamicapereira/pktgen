@@ -199,8 +199,6 @@ void config_init(int argc, char **argv) {
     } break;
     case CMD_TOTAL_FLOWS_NUM: {
       config.num_flows = parse_int(optarg, CMD_TOTAL_FLOWS, 10);
-      PARSER_ASSERT(config.num_flows >= MIN_FLOWS_NUM, "Number of flows must be >= %" PRIu32 " (requested %" PRIu32 ").\n", MIN_FLOWS_NUM,
-                    config.num_flows);
     } break;
     case CMD_TRAFFIC_DISTRIBUTION_NUM: {
       if (strcmp(optarg, TRAFFIC_DISTRIBUTION_UNIFORM) == 0) {

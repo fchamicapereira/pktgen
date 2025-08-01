@@ -19,8 +19,6 @@ extern "C" {
 #define NUM_SAMPLE_PACKETS (2 * DESC_RING_SIZE)
 #define DEFAULT_FLOWS_FILE "flows.pcap"
 
-#define MIN_FLOWS_NUM 2
-
 // To induce churn, flows are changed from time to time, alternating between an
 // old and a new value. Naturally, alternating between these flows so fast that
 // the time between alternation becomes smaller than the expiration time
