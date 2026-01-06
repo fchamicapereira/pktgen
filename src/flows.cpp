@@ -159,13 +159,13 @@ std::string flow_to_string(const flow_t &flow) {
     ss << rte_bswap16(flow.dst_port);
 
     ss << " (";
-    ss << std::hex << std::setw(8) << std::setfill('0') << (int)flow.src_ip;
+    ss << std::hex << std::setw(8) << std::setfill('0') << (int)rte_bswap32(flow.src_ip);
     ss << ":";
-    ss << std::hex << std::setw(4) << std::setfill('0') << (int)flow.src_port;
+    ss << std::hex << std::setw(4) << std::setfill('0') << (int)rte_bswap16(flow.src_port);
     ss << " -> ";
-    ss << std::hex << std::setw(8) << std::setfill('0') << (int)flow.dst_ip;
+    ss << std::hex << std::setw(8) << std::setfill('0') << (int)rte_bswap32(flow.dst_ip);
     ss << ":";
-    ss << std::hex << std::setw(4) << std::setfill('0') << (int)flow.dst_port;
+    ss << std::hex << std::setw(4) << std::setfill('0') << (int)rte_bswap16(flow.dst_port);
     ss << ")";
   }
 
