@@ -369,6 +369,8 @@ static int tx_worker_main(void *arg) {
 
   uint16_t queue_id = worker_config->queue_id;
 
+  uint32_t churn_flow_idx = 0;
+
   // Run until the application is killed
   while (likely(!quit)) {
     // Check if the configuration was updated. We probably need to recompute some stuff before running again.
@@ -402,10 +404,6 @@ static int tx_worker_main(void *arg) {
       const uint32_t flow_idx = config.warmup_active ? worker_config->warmup_flow_idx_seq[(flow_idx_counter + i) % warmup_flow_idx_seq_size]
                                                      : worker_config->flow_idx_seq[(flow_idx_counter + i) % flow_idx_seq_size];
       ticks_t &flow_timer     = flows_timers[flow_idx];
-
-      if (flow_idx >= num_total_flows) {
-        rte_exit(EXIT_FAILURE, "Invalid flow index %u (total flows: %zu)\n", flow_idx, num_total_flows);
-      }
       size_t &chosen_kvs_op_idx = chosen_kvs_op_idxs[flow_idx];
       enum kvs_op chosen_kvs_op = kvs_ops_per_flow[flow_idx][chosen_kvs_op_idx];
       chosen_kvs_op_idx         = (chosen_kvs_op_idx + 1) % total_kvs_ops_per_flow;
@@ -413,7 +411,8 @@ static int tx_worker_main(void *arg) {
       // Inducing churn by randomizing flows during run.
       if (flow_ticks > 0 && period_start_tick >= flow_timer) {
         flow_timer += flow_ticks;
-        randomize_flow(flow_idx);
+        randomize_flow(churn_flow_idx);
+        churn_flow_idx = (churn_flow_idx + 1) % num_total_flows;
       }
 
       const flow_t &flow = flows[flow_idx];
