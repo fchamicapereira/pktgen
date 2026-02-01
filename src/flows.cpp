@@ -17,6 +17,7 @@
 
 std::vector<flow_t> flows;
 std::vector<uint32_t> flow_idx_seq;
+std::vector<uint32_t> warmup_flow_idx_seq;
 
 static flow_t generate_random_flow() {
   flow_t flow;
@@ -125,6 +126,23 @@ std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
   }
 
   return flow_idx_seq_per_worker;
+}
+
+std::vector<std::vector<uint32_t>> generate_warmup_flow_idx_sequence_per_worker() {
+  LOG("Generating distribution of warmup flow indexes...");
+  warmup_flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
+  std::reverse(warmup_flow_idx_seq.begin(), warmup_flow_idx_seq.end());
+
+  LOG("Distributing warmup flow indexes per worker...");
+  std::vector<std::vector<uint32_t>> warmup_flow_idx_seq_per_worker(config.tx.num_cores);
+
+  uint16_t worker_id = 0;
+  for (size_t i = 0; i < warmup_flow_idx_seq.size(); i++) {
+    warmup_flow_idx_seq_per_worker[worker_id].push_back(warmup_flow_idx_seq[i]);
+    worker_id = (worker_id + 1) % config.tx.num_cores;
+  }
+
+  return warmup_flow_idx_seq_per_worker;
 }
 
 std::string flow_to_string(const flow_t &flow) {

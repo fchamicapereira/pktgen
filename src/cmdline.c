@@ -175,10 +175,14 @@ static void cmd_run_callback(__rte_unused void *ptr_params, __rte_unused struct 
   cmd_run(time);
 }
 
-static void cmd_warmup_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
+static void cmd_toggle_warmup_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
   struct cmd_int_params *params = ptr_params;
-  time_s_t time                 = (double)params->param;
-  cmd_warmup(time);
+  bool active                   = params->param != 0;
+  if (active) {
+    cmd_activate_warmup();
+  } else {
+    cmd_deactivate_warmup();
+  }
 }
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -262,18 +266,18 @@ cmd_run_cmd = {
 };
 
 CMDLINE_PARSE_INT_NTOKENS(2)
-cmd_warmup_cmd = {
-    .f        = cmd_warmup_callback,
+cmd_toggle_warmup_cmd = {
+    .f        = cmd_toggle_warmup_callback,
     .data     = NULL,
-    .help_str = "warmup <time>\n     Set warmup duration to <time> seconds",
+    .help_str = "warmup <state>\n     Toggle warmup state (0=off, other=on)",
     .tokens   = {(void *)&cmd_warmup_token_cmd, (void *)&cmd_int_token_param, NULL},
 };
 
 cmdline_parse_ctx_t list_prompt_commands[] = {
-    (cmdline_parse_inst_t *)&cmd_quit_cmd,  (cmdline_parse_inst_t *)&cmd_start_cmd,       (cmdline_parse_inst_t *)&cmd_stop_cmd,
-    (cmdline_parse_inst_t *)&cmd_stats_cmd, (cmdline_parse_inst_t *)&cmd_stats_reset_cmd, (cmdline_parse_inst_t *)&cmd_flows_cmd,
-    (cmdline_parse_inst_t *)&cmd_dist_cmd,  (cmdline_parse_inst_t *)&cmd_rate_cmd,        (cmdline_parse_inst_t *)&cmd_churn_cmd,
-    (cmdline_parse_inst_t *)&cmd_run_cmd,   (cmdline_parse_inst_t *)&cmd_warmup_cmd,      NULL,
+    (cmdline_parse_inst_t *)&cmd_quit_cmd,  (cmdline_parse_inst_t *)&cmd_start_cmd,         (cmdline_parse_inst_t *)&cmd_stop_cmd,
+    (cmdline_parse_inst_t *)&cmd_stats_cmd, (cmdline_parse_inst_t *)&cmd_stats_reset_cmd,   (cmdline_parse_inst_t *)&cmd_flows_cmd,
+    (cmdline_parse_inst_t *)&cmd_dist_cmd,  (cmdline_parse_inst_t *)&cmd_rate_cmd,          (cmdline_parse_inst_t *)&cmd_churn_cmd,
+    (cmdline_parse_inst_t *)&cmd_run_cmd,   (cmdline_parse_inst_t *)&cmd_toggle_warmup_cmd, NULL,
 };
 
 void cmdline_start() {
