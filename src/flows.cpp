@@ -7,12 +7,17 @@
 #include <unordered_set>
 #include <vector>
 #include <iomanip>
+#include <cmath>
+#include <unordered_map>
+#include <algorithm>
 
 #include "log.h"
 #include "pktgen.h"
 #include "random.h"
 
 std::vector<flow_t> flows;
+std::vector<uint32_t> flow_idx_seq;
+std::vector<uint32_t> warmup_flow_idx_seq;
 
 static flow_t generate_random_flow() {
   flow_t flow;
@@ -65,16 +70,20 @@ struct flow_comp_t {
   };
 };
 
-void generate_unique_flows() {
-  flows = std::vector<flow_t>(config.num_flows);
-
-  std::unordered_set<flow_t, flow_hash_t, flow_comp_t> flows_set;
-  std::unordered_set<crc32_t> flows_crc;
-
-  const uint32_t crc_mask = (uint32_t)((1 << (uint64_t)(config.crc_bits)) - 1);
+void generate_flows() {
+  flows.resize(config.num_flows);
 
   LOG("Generating %u flows...", config.num_flows);
 
+  // Super fast
+  if (!config.force_unique_flows) {
+    for (flow_t &flow : flows) {
+      flow = generate_random_flow();
+    }
+    return;
+  }
+
+  std::unordered_set<flow_t, flow_hash_t, flow_comp_t> flows_set;
   while (flows_set.size() != config.num_flows) {
     const flow_t flow = generate_random_flow();
 
@@ -83,39 +92,27 @@ void generate_unique_flows() {
       continue;
     }
 
-    if (config.crc_unique_flows) {
-      const int len     = config.kvs_mode ? sizeof(flow.kvs_key) + sizeof(flow.kvs_value)
-                                          : sizeof(flow.src_ip) + sizeof(flow.dst_ip) + sizeof(flow.src_port) + sizeof(flow.dst_port);
-      const crc32_t crc = calculate_crc32((byte_t *)&flow, len) & crc_mask;
-
-      // Although the flow is unique, its masked CRC is not.
-      if (flows_crc.find(crc) != flows_crc.end()) {
-        continue;
-      }
-
-      // We're good.
-      flows_crc.insert(crc);
-    }
-
     const size_t idx = flows_set.size();
     flows[idx]       = flow;
     flows_set.insert(flow);
   }
 }
 
+void randomize_flow(uint32_t flow_idx) {
+  assert(flow_idx < flows.size() && "Invalid flow index");
+  flows[flow_idx] = generate_random_flow();
+}
+
 const std::vector<flow_t> &get_generated_flows() { return flows; }
 
 std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
-  const size_t num_base_flows = config.num_flows / 2;
-
   LOG("Generating distribution of flow indexes...");
-  std::vector<uint32_t> flow_idx_seq;
   switch (config.dist) {
   case UNIFORM:
-    flow_idx_seq = generate_uniform_flow_idx_sequence(num_base_flows);
+    flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
     break;
   case ZIPF:
-    flow_idx_seq = generate_zipf_flow_idx_sequence(num_base_flows, config.zipf_param);
+    flow_idx_seq = generate_zipf_flow_idx_sequence(config.num_flows, config.zipf_param);
     break;
   }
 
@@ -138,6 +135,23 @@ std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
   }
 
   return flow_idx_seq_per_worker;
+}
+
+std::vector<std::vector<uint32_t>> generate_warmup_flow_idx_sequence_per_worker() {
+  LOG("Generating distribution of warmup flow indexes...");
+  warmup_flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
+  std::reverse(warmup_flow_idx_seq.begin(), warmup_flow_idx_seq.end());
+
+  LOG("Distributing warmup flow indexes per worker...");
+  std::vector<std::vector<uint32_t>> warmup_flow_idx_seq_per_worker(config.tx.num_cores);
+
+  uint16_t worker_id = 0;
+  for (size_t i = 0; i < warmup_flow_idx_seq.size(); i++) {
+    warmup_flow_idx_seq_per_worker[worker_id].push_back(warmup_flow_idx_seq[i]);
+    worker_id = (worker_id + 1) % config.tx.num_cores;
+  }
+
+  return warmup_flow_idx_seq_per_worker;
 }
 
 std::string flow_to_string(const flow_t &flow) {
@@ -170,6 +184,16 @@ std::string flow_to_string(const flow_t &flow) {
     ss << ((flow.dst_ip >> 24) & 0xff);
     ss << ":";
     ss << rte_bswap16(flow.dst_port);
+
+    ss << " (";
+    ss << std::hex << std::setw(8) << std::setfill('0') << (int)rte_bswap32(flow.src_ip);
+    ss << ":";
+    ss << std::hex << std::setw(4) << std::setfill('0') << (int)rte_bswap16(flow.src_port);
+    ss << " -> ";
+    ss << std::hex << std::setw(8) << std::setfill('0') << (int)rte_bswap32(flow.dst_ip);
+    ss << ":";
+    ss << std::hex << std::setw(4) << std::setfill('0') << (int)rte_bswap16(flow.dst_port);
+    ss << ")";
   }
 
   return ss.str();
@@ -182,4 +206,89 @@ void cmd_flows_display() {
   for (const flow_t &flow : flows) {
     LOG("%s", flow_to_string(flow).c_str());
   }
+}
+
+void cmd_dist_display() {
+  LOG();
+  LOG("~~~~~~ Traffic distribution ~~~~~~");
+
+  std::unordered_map<uint32_t, uint64_t> flow_idx_seq_count(config.num_flows);
+  uint64_t total_count = 0;
+
+  for (uint32_t flow_idx : flow_idx_seq) {
+    if (flow_idx_seq_count.find(flow_idx) == flow_idx_seq_count.end()) {
+      flow_idx_seq_count[flow_idx] = 0;
+    }
+    flow_idx_seq_count[flow_idx]++;
+    total_count++;
+  }
+
+  // Sort by count
+  std::vector<uint64_t> counts(flow_idx_seq_count.size());
+  for (const auto &pair : flow_idx_seq_count) {
+    counts[pair.first] = pair.second;
+  }
+  std::sort(counts.begin(), counts.end(), std::greater<uint64_t>());
+
+  // Build a CDF
+  std::vector<double> cdf;
+  double cumulative_count = 0.0;
+  for (const auto &count : counts) {
+    cumulative_count += count;
+    cdf.push_back(cumulative_count / total_count);
+  }
+
+  // Showing the CDF in 10% increments
+  double last_cdf_value = 0.0;
+  for (size_t i = 0; i < cdf.size(); i++) {
+    if (i == 0 || cdf[i] >= last_cdf_value + 0.1 || i == cdf.size() - 1) {
+      const uint32_t flows          = i + 1;
+      const double flows_percentage = (static_cast<double>(flows) / (config.num_flows / 2)) * 100.0;
+      const double cdf_value        = cdf[i];
+      LOG("%8u %7.2f%% : %7.2f%%", flows, flows_percentage, cdf_value * 100.0);
+      last_cdf_value = cdf_value;
+    }
+  }
+}
+
+struct kvs_ratio_t {
+  uint64_t get;
+  uint64_t put;
+};
+
+static struct kvs_ratio_t calculate_kvs_ratio() {
+  double get_ratio         = config.kvs_get_ratio;
+  struct kvs_ratio_t ratio = {.get = 0, .put = 0};
+
+  uint64_t total = 1;
+
+  double lhs = -1;
+  while (std::modf(get_ratio, &lhs) != 0) {
+    total *= 10;
+    get_ratio *= 10;
+  }
+
+  ratio.get = static_cast<uint64_t>(get_ratio);
+  ratio.put = total - ratio.get;
+
+  assert(ratio.get + ratio.put > 0 && "Invalid KVS ratio");
+
+  return ratio;
+}
+
+std::vector<std::vector<enum kvs_op>> generate_kvs_ops_per_flow() {
+  std::vector<std::vector<enum kvs_op>> kvs_ops_per_flow(config.num_flows);
+
+  const struct kvs_ratio_t ratio = calculate_kvs_ratio();
+
+  for (size_t flow_idx = 0; flow_idx < kvs_ops_per_flow.size(); flow_idx++) {
+    for (uint64_t i = 0; i < ratio.put; i++) {
+      kvs_ops_per_flow[flow_idx].push_back(KVS_OP_PUT);
+    }
+    for (uint64_t i = 0; i < ratio.get; i++) {
+      kvs_ops_per_flow[flow_idx].push_back(KVS_OP_GET);
+    }
+  }
+
+  return kvs_ops_per_flow;
 }

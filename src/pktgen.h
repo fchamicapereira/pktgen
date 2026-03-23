@@ -19,8 +19,6 @@ extern "C" {
 #define NUM_SAMPLE_PACKETS (2 * DESC_RING_SIZE)
 #define DEFAULT_FLOWS_FILE "flows.pcap"
 
-#define MIN_FLOWS_NUM 2
-
 // To induce churn, flows are changed from time to time, alternating between an
 // old and a new value. Naturally, alternating between these flows so fast that
 // the time between alternation becomes smaller than the expiration time
@@ -55,8 +53,8 @@ typedef uint64_t time_ns_t;
 
 typedef uint32_t crc32_t;
 
-#define KEY_SIZE_BYTES 16
-#define MAX_VALUE_SIZE_BYTES 128
+#define KEY_SIZE_BYTES 4
+#define MAX_VALUE_SIZE_BYTES 4
 #define KVSTORE_PORT 670
 
 enum kvs_op {
@@ -114,9 +112,7 @@ struct config_t {
   uint32_t num_flows;
   enum traffic_dist_t dist;
   double zipf_param;
-  bool crc_unique_flows;
-  uint32_t crc_bits;
-  time_ns_t exp_time;
+  bool force_unique_flows;
   bytes_t pkt_size;
 
   time_s_t warmup_duration;
@@ -124,8 +120,8 @@ struct config_t {
   bool warmup_active;
   bool mark_warmup_packets;
   bool kvs_mode;
+  double kvs_get_ratio;
 
-  churn_fpm_t max_churn;
   rate_gbps_t rate;
 
   struct {
@@ -150,6 +146,7 @@ void config_print_usage(char **argv);
 void cmdline_start();
 void cmd_binsearch();
 void cmd_flows_display();
+void cmd_dist_display();
 void cmd_start();
 void cmd_stop();
 void cmd_rate(rate_gbps_t rate);

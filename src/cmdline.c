@@ -55,6 +55,7 @@ INIT_PARAMETERLESS_COMMAND(cmd_stats_token_cmd, cmd, "stats");
 INIT_PARAMETERLESS_COMMAND(cmd_stats_reset_token_cmd, cmd, "reset");
 INIT_PARAMETERLESS_COMMAND(cmd_bench_token_cmd, cmd, "bench");
 INIT_PARAMETERLESS_COMMAND(cmd_flows_token_cmd, cmd, "flows");
+INIT_PARAMETERLESS_COMMAND(cmd_dist_token_cmd, cmd, "dist");
 
 /* Commands taking just an int */
 INIT_INT_COMMAND(cmd_rate_token_cmd, cmd, "rate")
@@ -86,15 +87,6 @@ void cmd_rate(rate_gbps_t rate) {
 }
 
 void cmd_churn(churn_fpm_t churn) {
-  if (churn > config.max_churn) {
-    WARNING("*************************************************************************");
-    WARNING("Invalid churn value (requested %" PRIu64 " is bigger than max %" PRIu64 " fpm). Ignoring request.", churn, config.max_churn);
-    WARNING("*************************************************************************");
-    return;
-  }
-
-  uint32_t num_base_flows = config.num_flows / 2;
-
   if (churn == 0) {
     config.runtime.flow_ttl = 0;
     signal_new_config();
@@ -104,14 +96,7 @@ void cmd_churn(churn_fpm_t churn) {
   double churn_fps = (double)churn / 60;
   assert(churn_fps != 0);
 
-  time_ns_t flow_ttl = (1e9 * (uint64_t)num_base_flows) / churn_fps;
-
-  if (flow_ttl < config.exp_time) {
-    WARNING("*************************************************************************");
-    WARNING("Flow TTL (%" PRIu64 "ns) is smaller than the expiration time (%" PRIu64 "ns). Ignoring request.", flow_ttl, config.exp_time);
-    WARNING("*************************************************************************");
-    return;
-  }
+  time_ns_t flow_ttl = (1e9 * (uint64_t)config.num_flows) / churn_fps;
 
   LOG_DEBUG("Flow TTL = %" PRIu64 "ns", flow_ttl);
 
@@ -215,6 +200,10 @@ static void cmd_flows_callback(__rte_unused void *ptr_params, __rte_unused struc
   cmd_flows_display();
 }
 
+static void cmd_dist_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
+  cmd_dist_display();
+}
+
 static void cmd_stats_reset_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
   cmd_stats_reset();
 }
@@ -241,10 +230,14 @@ static void cmd_run_callback(__rte_unused void *ptr_params, __rte_unused struct 
   cmd_run(time);
 }
 
-static void cmd_warmup_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
+static void cmd_toggle_warmup_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
   struct cmd_int_params *params = ptr_params;
-  time_s_t time                 = (double)params->param;
-  cmd_warmup(time);
+  bool active                   = params->param != 0;
+  if (active) {
+    cmd_activate_warmup();
+  } else {
+    cmd_deactivate_warmup();
+  }
 }
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -288,6 +281,14 @@ cmd_flows_cmd = {
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
+cmd_dist_cmd = {
+    .f        = cmd_dist_callback,
+    .data     = NULL,
+    .help_str = "dist\n     Show flow distribution",
+    .tokens   = {(void *)&cmd_dist_token_cmd, NULL},
+};
+
+CMDLINE_PARSE_INT_NTOKENS(1)
 cmd_stats_reset_cmd = {
     .f        = cmd_stats_reset_callback,
     .data     = NULL,
@@ -328,18 +329,27 @@ cmd_run_cmd = {
 };
 
 CMDLINE_PARSE_INT_NTOKENS(2)
-cmd_warmup_cmd = {
-    .f        = cmd_warmup_callback,
+cmd_toggle_warmup_cmd = {
+    .f        = cmd_toggle_warmup_callback,
     .data     = NULL,
-    .help_str = "warmup <time>\n     Set warmup duration to <time> seconds",
+    .help_str = "warmup <state>\n     Toggle warmup state (0=off, other=on)",
     .tokens   = {(void *)&cmd_warmup_token_cmd, (void *)&cmd_int_token_param, NULL},
 };
 
 cmdline_parse_ctx_t list_prompt_commands[] = {
-    (cmdline_parse_inst_t *)&cmd_quit_cmd,   (cmdline_parse_inst_t *)&cmd_start_cmd,       (cmdline_parse_inst_t *)&cmd_stop_cmd,
-    (cmdline_parse_inst_t *)&cmd_stats_cmd,  (cmdline_parse_inst_t *)&cmd_stats_reset_cmd, (cmdline_parse_inst_t *)&cmd_flows_cmd,
-    (cmdline_parse_inst_t *)&cmd_rate_cmd,   (cmdline_parse_inst_t *)&cmd_churn_cmd,       (cmdline_parse_inst_t *)&cmd_run_cmd,
-    (cmdline_parse_inst_t *)&cmd_warmup_cmd, (cmdline_parse_inst_t *)&cmd_bench_cmd,       NULL,
+    (cmdline_parse_inst_t *)&cmd_quit_cmd,
+    (cmdline_parse_inst_t *)&cmd_start_cmd,
+    (cmdline_parse_inst_t *)&cmd_stop_cmd,
+    (cmdline_parse_inst_t *)&cmd_stats_cmd,
+    (cmdline_parse_inst_t *)&cmd_stats_reset_cmd,
+    (cmdline_parse_inst_t *)&cmd_flows_cmd,
+    (cmdline_parse_inst_t *)&cmd_dist_cmd,
+    (cmdline_parse_inst_t *)&cmd_rate_cmd,
+    (cmdline_parse_inst_t *)&cmd_churn_cmd,
+    (cmdline_parse_inst_t *)&cmd_run_cmd,
+    (cmdline_parse_inst_t *)&cmd_toggle_warmup_cmd,
+    (cmdline_parse_inst_t *)&cmd_bench_cmd,
+    NULL,
 };
 
 void cmdline_start() {
