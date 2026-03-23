@@ -28,6 +28,7 @@
 #include "flows.h"
 #include "log.h"
 #include "random.h"
+#include "stats.h"
 
 // Source/destination MACs
 const struct rte_ether_addr src_mac = {{0xb4, 0x96, 0x91, 0xa4, 0x02, 0xe9}};

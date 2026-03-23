@@ -128,6 +128,15 @@ std::vector<std::vector<uint32_t>> generate_flow_idx_sequence_per_worker() {
     worker_id = (worker_id + 1) % config.tx.num_cores;
   }
 
+  for (uint16_t worker_id = flow_idx_seq.size(); worker_id < config.tx.num_cores; worker_id++) {
+    // HACK: If there are more workers than flows, we assign the same flow indexes to the remaining workers..
+    flow_idx_seq_per_worker[worker_id] = flow_idx_seq_per_worker[0];
+  }
+
+  for (uint16_t worker_id = 0; worker_id < config.tx.num_cores; worker_id++) {
+    LOG("Worker %u: %zu flow indexes", worker_id, flow_idx_seq_per_worker[worker_id].size());
+  }
+
   return flow_idx_seq_per_worker;
 }
 

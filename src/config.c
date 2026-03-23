@@ -280,9 +280,9 @@ void config_init(int argc, char **argv) {
   PARSER_ASSERT(config.tx.num_cores < nb_cores, "Insufficient number of cores (main=1, tx=%" PRIu16 ", available=%" PRIu16 ").\n",
                 config.tx.num_cores, nb_cores);
 
-  PARSER_ASSERT((config.num_flows / 2) >= config.tx.num_cores,
-                "Too many cores (%" PRIu16 ") for the requested number of flows (%" PRIu32 "). Use at most half the number of flows.\n",
-                config.tx.num_cores, config.num_flows);
+  // PARSER_ASSERT((config.num_flows / 2) >= config.tx.num_cores,
+  //               "Too many cores (%" PRIu16 ") for the requested number of flows (%" PRIu32 "). Use at most half the number of flows.\n",
+  //               config.tx.num_cores, config.num_flows);
 
   if (config.exp_time > 0) {
     config.max_churn = ((double)(60.0 * config.num_flows)) / NS_TO_S(MIN_CHURN_ACTION_TIME_MULTIPLIER * config.exp_time);

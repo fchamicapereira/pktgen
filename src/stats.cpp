@@ -3,6 +3,7 @@
 
 #include "log.h"
 #include "pktgen.h"
+#include "stats.h"
 
 static void cmd_stats_display_port(uint16_t port_id) {
   struct rte_eth_stats stats;

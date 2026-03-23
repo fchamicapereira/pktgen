@@ -13,6 +13,13 @@
 #include "clock.h"
 #include "log.h"
 #include "pktgen.h"
+#include "stats.h"
+
+#define BIN_SEARCH_IT_STEPS 10
+#define BIN_SEARCH_MIN_RATE_Mbps 1      /* 1 Mbps */
+#define BIN_SEARCH_MAX_RATE_Mbps 100000 /* 100 Gbps */
+#define BIN_SEARCH_IT_DURATION_S 10
+#define BIN_SEARCH_LOSS_THRESHOLD 0.001 /* 0.1% */
 
 #define CMDLINE_PARSE_INT_NTOKENS(NTOKENS)                                                                                                 \
   struct {                                                                                                                                 \
@@ -46,6 +53,7 @@ INIT_PARAMETERLESS_COMMAND(cmd_start_token_cmd, cmd, "start");
 INIT_PARAMETERLESS_COMMAND(cmd_stop_token_cmd, cmd, "stop");
 INIT_PARAMETERLESS_COMMAND(cmd_stats_token_cmd, cmd, "stats");
 INIT_PARAMETERLESS_COMMAND(cmd_stats_reset_token_cmd, cmd, "reset");
+INIT_PARAMETERLESS_COMMAND(cmd_bench_token_cmd, cmd, "bench");
 INIT_PARAMETERLESS_COMMAND(cmd_flows_token_cmd, cmd, "flows");
 
 /* Commands taking just an int */
@@ -142,6 +150,49 @@ void cmd_run(time_s_t duration) {
   cmd_stop();
 }
 
+void cmd_bench() {
+  rate_mbps_t low             = BIN_SEARCH_MIN_RATE_Mbps;
+  rate_mbps_t high            = BIN_SEARCH_MAX_RATE_Mbps;
+  rate_mbps_t rate            = high;
+  struct stats_t stable_stats = {0};
+
+  for (int i = 0; i < BIN_SEARCH_IT_STEPS; i++) {
+    LOG("Testing rate %.0lf Mbps...", rate);
+
+    cmd_rate(rate / 1e3);
+    cmd_stats_reset();
+    cmd_start();
+    sleep_s(BIN_SEARCH_IT_DURATION_S);
+    cmd_stop();
+    sleep_s(1);
+
+    struct stats_t stats = get_stats();
+
+    double loss = (double)(stats.tx_pkts - stats.rx_pkts) / stats.tx_pkts;
+    LOG("TX %" PRIu64 " RX %" PRIu64 " loss %.4f%%", stats.tx_pkts, stats.rx_pkts, 100 * loss);
+
+    if (loss < BIN_SEARCH_LOSS_THRESHOLD) {
+      low          = rate;
+      stable_stats = stats;
+      if (rate == BIN_SEARCH_MAX_RATE_Mbps) {
+        break;
+      }
+    } else {
+      high = rate;
+    }
+
+    rate = (low + high) / 2;
+  }
+
+  rate_mbps_t actual_rate_bps = stable_stats.tx_bytes * 8.0 / (BIN_SEARCH_IT_DURATION_S * 1e6);
+  rate_mpps_t actual_rate_pps = stable_stats.tx_pkts / (BIN_SEARCH_IT_DURATION_S * 1e6);
+
+  LOG("Stable report:");
+  LOG("\tTX %" PRIu64 " pkts %" PRIu64 " bytes", stable_stats.tx_pkts, stable_stats.tx_bytes);
+  LOG("\tRX %" PRIu64 " pkts %" PRIu64 " bytes", stable_stats.rx_pkts, stable_stats.rx_bytes);
+  LOG("\tRate %.0lf Mbps (%.0lf Mpps)", actual_rate_bps, actual_rate_pps);
+}
+
 void cmd_warmup(time_s_t time) {
   signal_new_config();
 
@@ -166,6 +217,10 @@ static void cmd_flows_callback(__rte_unused void *ptr_params, __rte_unused struc
 
 static void cmd_stats_reset_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
   cmd_stats_reset();
+}
+
+static void cmd_bench_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
+  cmd_bench();
 }
 
 static void cmd_rate_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
@@ -240,6 +295,14 @@ cmd_stats_reset_cmd = {
     .tokens   = {(void *)&cmd_stats_reset_token_cmd, NULL},
 };
 
+CMDLINE_PARSE_INT_NTOKENS(1)
+cmd_bench_cmd = {
+    .f        = cmd_bench_callback,
+    .data     = NULL,
+    .help_str = "bench\n     Perform binary search",
+    .tokens   = {(void *)&cmd_bench_token_cmd, NULL},
+};
+
 CMDLINE_PARSE_INT_NTOKENS(2)
 cmd_rate_cmd = {
     .f        = cmd_rate_callback,
@@ -273,17 +336,10 @@ cmd_warmup_cmd = {
 };
 
 cmdline_parse_ctx_t list_prompt_commands[] = {
-    (cmdline_parse_inst_t *)&cmd_quit_cmd,
-    (cmdline_parse_inst_t *)&cmd_start_cmd,
-    (cmdline_parse_inst_t *)&cmd_stop_cmd,
-    (cmdline_parse_inst_t *)&cmd_stats_cmd,
-    (cmdline_parse_inst_t *)&cmd_stats_reset_cmd,
-    (cmdline_parse_inst_t *)&cmd_flows_cmd,
-    (cmdline_parse_inst_t *)&cmd_rate_cmd,
-    (cmdline_parse_inst_t *)&cmd_churn_cmd,
-    (cmdline_parse_inst_t *)&cmd_run_cmd,
-    (cmdline_parse_inst_t *)&cmd_warmup_cmd,
-    NULL,
+    (cmdline_parse_inst_t *)&cmd_quit_cmd,   (cmdline_parse_inst_t *)&cmd_start_cmd,       (cmdline_parse_inst_t *)&cmd_stop_cmd,
+    (cmdline_parse_inst_t *)&cmd_stats_cmd,  (cmdline_parse_inst_t *)&cmd_stats_reset_cmd, (cmdline_parse_inst_t *)&cmd_flows_cmd,
+    (cmdline_parse_inst_t *)&cmd_rate_cmd,   (cmdline_parse_inst_t *)&cmd_churn_cmd,       (cmdline_parse_inst_t *)&cmd_run_cmd,
+    (cmdline_parse_inst_t *)&cmd_warmup_cmd, (cmdline_parse_inst_t *)&cmd_bench_cmd,       NULL,
 };
 
 void cmdline_start() {

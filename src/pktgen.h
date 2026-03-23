@@ -148,9 +148,7 @@ void config_print();
 void config_print_usage(char **argv);
 
 void cmdline_start();
-void cmd_stats_display();
-void cmd_stats_display_compact();
-void cmd_stats_reset();
+void cmd_binsearch();
 void cmd_flows_display();
 void cmd_start();
 void cmd_stop();
@@ -158,14 +156,6 @@ void cmd_rate(rate_gbps_t rate);
 void cmd_churn(churn_fpm_t churn);
 void cmd_timer(time_s_t time);
 
-struct stats_t {
-  uint64_t rx_pkts;
-  uint64_t rx_bytes;
-  uint64_t tx_pkts;
-  uint64_t tx_bytes;
-};
-
-struct stats_t get_stats();
 crc32_t calculate_crc32(byte_t *data, int len);
 
 #ifdef __cplusplus
