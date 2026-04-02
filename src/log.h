@@ -29,3 +29,9 @@
     printf(fmt "\r", ##__VA_ARGS__);                                                                                                       \
     fflush(stdout);                                                                                                                        \
   }
+
+#define panic(fmt, ...)                                                                                                                    \
+  {                                                                                                                                        \
+    LOG("PANIC: " fmt "\n", ##__VA_ARGS__);                                                                                                \
+    exit(1);                                                                                                                               \
+  }

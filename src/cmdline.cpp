@@ -1,25 +1,33 @@
+#include "clock.h"
+#include "log.h"
+#include "cmdline.h"
+#include "stats.h"
+#include "config.h"
+#include "flows.h"
+
 #include <cmdline.h>
 #include <cmdline_parse.h>
 #include <cmdline_parse_etheraddr.h>
 #include <cmdline_parse_num.h>
 #include <cmdline_parse_string.h>
 #include <cmdline_socket.h>
+
 #include <rte_atomic.h>
 #include <rte_ethdev.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
-#include "clock.h"
-#include "log.h"
-#include "pktgen.h"
-#include "stats.h"
+#include <unordered_map>
 
 #define BIN_SEARCH_IT_STEPS 10
 #define BIN_SEARCH_MIN_RATE_Mbps 1      /* 1 Mbps */
 #define BIN_SEARCH_MAX_RATE_Mbps 100000 /* 100 Gbps */
 #define BIN_SEARCH_IT_DURATION_S 10
 #define BIN_SEARCH_LOSS_THRESHOLD 0.001 /* 0.1% */
+
+struct runtime_config_t runtime_config;
 
 #define CMDLINE_PARSE_INT_NTOKENS(NTOKENS)                                                                                                 \
   struct {                                                                                                                                 \
@@ -67,28 +75,28 @@ cmdline_parse_token_num_t cmd_int_token_param = TOKEN_NUM_INITIALIZER(struct cmd
 
 static inline void signal_new_config() {
   rte_smp_mb();
-  rte_atomic64_inc((rte_atomic64_t *)&config.runtime.update_cnt);
+  rte_atomic64_inc((rte_atomic64_t *)&runtime_config.update_cnt);
 }
 
 void cmd_start() {
-  config.runtime.running = true;
+  runtime_config.running = true;
   signal_new_config();
 }
 
 void cmd_stop() {
-  config.runtime.running = false;
+  runtime_config.running = false;
   signal_new_config();
 }
 
 void cmd_rate(rate_gbps_t rate) {
   config.rate                  = rate;
-  config.runtime.rate_per_core = config.rate / config.tx.num_cores;
+  runtime_config.rate_per_core = config.rate / config.tx.num_cores;
   signal_new_config();
 }
 
 void cmd_churn(churn_fpm_t churn) {
   if (churn == 0) {
-    config.runtime.flow_ttl = 0;
+    runtime_config.flow_ttl = 0;
     signal_new_config();
     return;
   }
@@ -96,11 +104,11 @@ void cmd_churn(churn_fpm_t churn) {
   double churn_fps = (double)churn / 60;
   assert(churn_fps != 0);
 
-  time_ns_t flow_ttl = (1e9 * (uint64_t)config.num_flows) / churn_fps;
+  time_ns_t flow_ttl = (1e9 * flows.size()) / churn_fps;
 
   LOG_DEBUG("Flow TTL = %" PRIu64 "ns", flow_ttl);
 
-  config.runtime.flow_ttl = flow_ttl;
+  runtime_config.flow_ttl = flow_ttl;
   signal_new_config();
 }
 
@@ -136,10 +144,15 @@ void cmd_run(time_s_t duration) {
 }
 
 void cmd_bench() {
-  rate_mbps_t low             = BIN_SEARCH_MIN_RATE_Mbps;
-  rate_mbps_t high            = BIN_SEARCH_MAX_RATE_Mbps;
-  rate_mbps_t rate            = high;
-  struct stats_t stable_stats = {0};
+  rate_mbps_t low      = BIN_SEARCH_MIN_RATE_Mbps;
+  rate_mbps_t high     = BIN_SEARCH_MAX_RATE_Mbps;
+  rate_mbps_t rate     = high;
+  stats_t stable_stats = {
+      .rx_pkts  = 0,
+      .rx_bytes = 0,
+      .tx_pkts  = 0,
+      .tx_bytes = 0,
+  };
 
   for (int i = 0; i < BIN_SEARCH_IT_STEPS; i++) {
     LOG("Testing rate %.0lf Mbps...", rate);
@@ -213,25 +226,25 @@ static void cmd_bench_callback(__rte_unused void *ptr_params, __rte_unused struc
 }
 
 static void cmd_rate_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
-  struct cmd_int_params *params = ptr_params;
+  struct cmd_int_params *params = (struct cmd_int_params *)ptr_params;
   rate_gbps_t rate              = (double)params->param / 1000.0;
   cmd_rate(rate);
 }
 
 static void cmd_churn_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
-  struct cmd_int_params *params = ptr_params;
+  struct cmd_int_params *params = (struct cmd_int_params *)ptr_params;
   churn_fpm_t churn             = (double)params->param;
   cmd_churn(churn);
 }
 
 static void cmd_run_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
-  struct cmd_int_params *params = ptr_params;
+  struct cmd_int_params *params = (struct cmd_int_params *)ptr_params;
   time_s_t time                 = (double)params->param;
   cmd_run(time);
 }
 
 static void cmd_toggle_warmup_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
-  struct cmd_int_params *params = ptr_params;
+  struct cmd_int_params *params = (struct cmd_int_params *)ptr_params;
   bool active                   = params->param != 0;
   if (active) {
     cmd_activate_warmup();
@@ -245,7 +258,7 @@ cmd_quit_cmd = {
     .f        = cmd_quit_callback,
     .data     = NULL,
     .help_str = "quit\n     Exit program",
-    .tokens   = {(void *)&cmd_quit_token_cmd, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_quit_token_cmd, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -253,7 +266,7 @@ cmd_start_cmd = {
     .f        = cmd_start_callback,
     .data     = NULL,
     .help_str = "start\n     Start packet generation",
-    .tokens   = {(void *)&cmd_start_token_cmd, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_start_token_cmd, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -261,7 +274,7 @@ cmd_stop_cmd = {
     .f        = cmd_stop_callback,
     .data     = NULL,
     .help_str = "stop\n     Stop packet generation",
-    .tokens   = {(void *)&cmd_stop_token_cmd, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_stop_token_cmd, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -269,7 +282,7 @@ cmd_stats_cmd = {
     .f        = cmd_stats_callback,
     .data     = NULL,
     .help_str = "stats\n     Show stats",
-    .tokens   = {(void *)&cmd_stats_token_cmd, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_stats_token_cmd, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -277,7 +290,7 @@ cmd_flows_cmd = {
     .f        = cmd_flows_callback,
     .data     = NULL,
     .help_str = "flows\n     Show flows",
-    .tokens   = {(void *)&cmd_flows_token_cmd, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_flows_token_cmd, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -285,7 +298,7 @@ cmd_dist_cmd = {
     .f        = cmd_dist_callback,
     .data     = NULL,
     .help_str = "dist\n     Show flow distribution",
-    .tokens   = {(void *)&cmd_dist_token_cmd, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_dist_token_cmd, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -293,7 +306,7 @@ cmd_stats_reset_cmd = {
     .f        = cmd_stats_reset_callback,
     .data     = NULL,
     .help_str = "reset\n     Reset stats",
-    .tokens   = {(void *)&cmd_stats_reset_token_cmd, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_stats_reset_token_cmd, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(1)
@@ -301,7 +314,7 @@ cmd_bench_cmd = {
     .f        = cmd_bench_callback,
     .data     = NULL,
     .help_str = "bench\n     Perform binary search",
-    .tokens   = {(void *)&cmd_bench_token_cmd, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_bench_token_cmd, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(2)
@@ -309,7 +322,7 @@ cmd_rate_cmd = {
     .f        = cmd_rate_callback,
     .data     = NULL,
     .help_str = "rate <rate>\n     Set rate in Mbps",
-    .tokens   = {(void *)&cmd_rate_token_cmd, (void *)&cmd_int_token_param, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_rate_token_cmd, (cmdline_parse_token_hdr_t *)&cmd_int_token_param, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(2)
@@ -317,7 +330,7 @@ cmd_churn_cmd = {
     .f        = cmd_churn_callback,
     .data     = NULL,
     .help_str = "churn <churn>\n     Set churn in fpm",
-    .tokens   = {(void *)&cmd_churn_token_cmd, (void *)&cmd_int_token_param, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_churn_token_cmd, (cmdline_parse_token_hdr_t *)&cmd_int_token_param, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(2)
@@ -325,7 +338,7 @@ cmd_run_cmd = {
     .f        = cmd_run_callback,
     .data     = NULL,
     .help_str = "run <time>\n     Run for <time> seconds and then stop",
-    .tokens   = {(void *)&cmd_run_token_cmd, (void *)&cmd_int_token_param, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_run_token_cmd, (cmdline_parse_token_hdr_t *)&cmd_int_token_param, NULL},
 };
 
 CMDLINE_PARSE_INT_NTOKENS(2)
@@ -333,7 +346,7 @@ cmd_toggle_warmup_cmd = {
     .f        = cmd_toggle_warmup_callback,
     .data     = NULL,
     .help_str = "warmup <state>\n     Toggle warmup state (0=off, other=on)",
-    .tokens   = {(void *)&cmd_warmup_token_cmd, (void *)&cmd_int_token_param, NULL},
+    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_warmup_token_cmd, (cmdline_parse_token_hdr_t *)&cmd_int_token_param, NULL},
 };
 
 cmdline_parse_ctx_t list_prompt_commands[] = {

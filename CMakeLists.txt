@@ -20,7 +20,7 @@ set(CMAKE_C_EXTENSIONS True)
 # Setting some complation flags
 ###############################################################################
 
-add_compile_options(-m64 -O3 -march=native -g -Wall -Wextra -Werror -Wfatal-errors)
+add_compile_options(-m64 -O3 -march=native -g -Wall -Wextra -Werror -Wno-parentheses -Wfatal-errors)
 
 ###############################################################################
 # Setting output targets
@@ -36,35 +36,20 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
-###############################################################################
-# libPCAP
-###############################################################################
+################################################################################
+# Add our CMake module directory to the list of module search directories
+################################################################################
 
-find_package(PCAP REQUIRED)
-
-if (PCAP_FOUND)
-    message(STATUS "Found libpcap")
-    include_directories(${PCAP_INCLUDE_DIR})
-    link_directories(${PCAP_LIBRARIES}/../)
-
-    message(PCAP_INCLUDE_DIR="${PCAP_INCLUDE_DIR}")
-    message(PCAP_LIBRARIES="${PCAP_LIBRARIES}")
-
-else()
-    message (FATAL_ERROR "libpcap not found")
-endif()
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules")
 
 ###############################################################################
-# DPDK
+# External libraries
 ###############################################################################
 
-find_package(DPDK REQUIRED)
-
-message(DPDK_INCLUDE_DIRS="${DPDK_INCLUDE_DIRS}")
-message(DPDK_LIBRARY_DIRS="${DPDK_LIBRARY_DIRS}")
-
-include_directories(${DPDK_INCLUDE_DIRS})
-link_directories(${DPDK_LIBRARY_DIRS})
+include(${CMAKE_SOURCE_DIR}/cmake/find_dpdk.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/find_pcap.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/find_zstd.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/find_cli11.cmake)
 
 ###############################################################################
 # Getting the source files
@@ -78,28 +63,19 @@ file(GLOB SOURCES ${PROJECT_SOURCE_DIR}/src/*.c ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-# https://stackoverflow.com/questions/56381463/executable-missing-full-library-path-after-build
-# cmake black magic...
-target_link_options(${PROJECT_NAME} PUBLIC "-Wl,--disable-new-dtags")
-
-target_link_libraries(${PROJECT_NAME} ${DPDK_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} ${PCAP_LIBRARIES})
-
-###############################################################################
-# Also build an executable for each tool
-###############################################################################
-
-list(REMOVE_ITEM SOURCES ${PROJECT_SOURCE_DIR}/src/pktgen.cpp)
-file(GLOB SOURCES_TOOLS ${PROJECT_SOURCE_DIR}/src/tools/*.c ${PROJECT_SOURCE_DIR}/src/tools/*.cpp)
-
-foreach(SOURCE_TOOL ${SOURCES_TOOLS})
-    get_filename_component(TOOL_NAME ${SOURCE_TOOL} NAME_WE)
-    set(TOOL_SOURCES ${SOURCE_TOOL} ${SOURCES})
-    add_executable(${TOOL_NAME} ${TOOL_SOURCES})
+target_link_libraries(${PROJECT_NAME} 
+    ${DPDK_LIBRARIES} 
+    ${PCAP_LIBRARIES} 
+    ZSTD::ZSTD
+    CLI11::CLI11
 
     # https://stackoverflow.com/questions/56381463/executable-missing-full-library-path-after-build
     # cmake black magic...
-    target_link_options(${TOOL_NAME} PUBLIC "-Wl,--disable-new-dtags")
+    "-Wl,--disable-new-dtags"
+)
 
-    target_link_libraries(${TOOL_NAME} ${DPDK_LIBRARIES})
-endforeach(SOURCE_TOOL ${SOURCES_TOOLS})
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC 
+    ${DPDK_INCLUDE_DIR}
+    ${PCAP_INCLUDE_DIR}
+    ${ZSTD_INCLUDE_DIRS}
+)

@@ -8,6 +8,10 @@
 | meson       | 1.3.1   |
 | DPDK        | 22.11   |
 
+## System library dependencies:
+- libzstd-dev
+- libpcap-dev 
+
 ## Installation instructions
 
 1. Run `setup.sh` to install dependencies locally.

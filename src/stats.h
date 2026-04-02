@@ -1,9 +1,5 @@
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdint.h>
 
 void cmd_stats_display();
@@ -18,7 +14,3 @@ struct stats_t {
 };
 
 struct stats_t get_stats();
-
-#ifdef __cplusplus
-}
-#endif

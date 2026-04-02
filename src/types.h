@@ -1,16 +1,7 @@
-#ifndef PKTGEN_SRC_PKTGEN_H_
-#define PKTGEN_SRC_PKTGEN_H_
+#pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include <rte_ether.h>
-#include <rte_ip.h>
-#include <rte_lcore.h>
-#include <rte_udp.h>
-#include <stdbool.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #define BURST_SIZE 32
 #define MBUF_CACHE_SIZE 512
@@ -33,21 +24,13 @@ typedef uint64_t bytes_t;
 typedef uint8_t bit_t;
 typedef uint8_t byte_t;
 
-#define PREAMBLE_SIZE_BYTES 8
-#define IPG_SIZE_BYTES 12
-
-#define MIN_PKT_SIZE ((bytes_t)64)   // With CRC
-#define MAX_PKT_SIZE ((bytes_t)1518) // With CRC
-
-#define MIN_CRC_BITS 1
-#define MAX_CRC_BITS 32
-
-#define WARMUP_PROTO_ID 0x92 // Reserved transport proto ID for warmup packets
-
 typedef uint64_t time_s_t;
 typedef uint64_t time_ms_t;
 typedef uint64_t time_us_t;
 typedef uint64_t time_ns_t;
+
+#define MIN_PKT_SIZE ((bytes_t)64)   // With CRC
+#define MAX_PKT_SIZE ((bytes_t)1518) // With CRC
 
 #define NS_TO_S(T) (((double)(T)) / 1e9)
 
@@ -90,73 +73,7 @@ typedef double rate_mbps_t;
 
 typedef double rate_mpps_t;
 
-struct runtime_config_t {
-  bool running;
-  uint64_t update_cnt;
-
-  // Information for each TX worker
-  rate_gbps_t rate_per_core;
-  time_ns_t flow_ttl;
-};
-
 enum traffic_dist_t {
   UNIFORM = 0,
   ZIPF    = 1,
 };
-
-struct config_t {
-  bool test_and_exit;
-  bool dump_flows_to_file;
-
-  uint64_t seed;
-  uint32_t num_flows;
-  enum traffic_dist_t dist;
-  double zipf_param;
-  bool force_unique_flows;
-  bytes_t pkt_size;
-
-  time_s_t warmup_duration;
-  rate_mbps_t warmup_rate;
-  bool warmup_active;
-  bool mark_warmup_packets;
-  bool kvs_mode;
-  double kvs_get_ratio;
-
-  rate_gbps_t rate;
-
-  struct {
-    uint16_t port;
-    uint16_t num_cores;
-    uint16_t cores[RTE_MAX_LCORE];
-  } tx;
-
-  struct {
-    uint16_t port;
-  } rx;
-
-  struct runtime_config_t runtime;
-};
-
-extern struct config_t config;
-
-void config_init(int argc, char **argv);
-void config_print();
-void config_print_usage(char **argv);
-
-void cmdline_start();
-void cmd_binsearch();
-void cmd_flows_display();
-void cmd_dist_display();
-void cmd_start();
-void cmd_stop();
-void cmd_rate(rate_gbps_t rate);
-void cmd_churn(churn_fpm_t churn);
-void cmd_timer(time_s_t time);
-
-crc32_t calculate_crc32(byte_t *data, int len);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif // PKTGEN_SRC_PKTGEN_H_

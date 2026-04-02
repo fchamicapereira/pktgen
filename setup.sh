@@ -91,7 +91,7 @@ install_dpdk() {
   popd
 
   DPDK_PKGCONFIG_PATH=$(realpath $(dirname $(find . -name "libdpdk.pc" | head -n 1)))
-  add_expr_to_paths_file "export PKG_CONFIG_PATH=\$PKG_CONFIG_PATH:$DPDK_PKGCONFIG_PATH"
+  add_expr_to_paths_file "export PKG_CONFIG_PATH=$DPDK_PKGCONFIG_PATH:\$PKG_CONFIG_PATH"
 }
 
 install_dpdk_kmods() {

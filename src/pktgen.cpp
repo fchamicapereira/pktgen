@@ -1,5 +1,3 @@
-#include "pktgen.h"
-
 #include <pcap.h>
 #include <rte_cycles.h>
 #include <rte_eal.h>
@@ -24,18 +22,20 @@
 #include <unordered_set>
 #include <vector>
 
+#include "types.h"
 #include "clock.h"
 #include "flows.h"
 #include "log.h"
 #include "random.h"
 #include "stats.h"
+#include "config.h"
+#include "cmdline.h"
 
 // Source/destination MACs
 const struct rte_ether_addr src_mac = {{0xb4, 0x96, 0x91, 0xa4, 0x02, 0xe9}};
 const struct rte_ether_addr dst_mac = {{0xb4, 0x96, 0x91, 0xa4, 0x04, 0x21}};
 
 volatile bool quit;
-struct config_t config;
 
 static void signal_handler(int signum) {
   (void)signum;
@@ -52,13 +52,13 @@ struct worker_config_t {
   const uint16_t queue_id;
 
   const bytes_t pkt_size;
-  const std::vector<uint32_t> flow_idx_seq;
-  const std::vector<uint32_t> warmup_flow_idx_seq;
+  const std::vector<uint64_t> flow_idx_seq;
+  const std::vector<uint64_t> warmup_flow_idx_seq;
 
   const runtime_config_t *runtime;
 
-  worker_config_t(struct rte_mempool *_pool, uint16_t _queue_id, bytes_t _pkt_size, const std::vector<uint32_t> &_flow_idx_seq,
-                  const std::vector<uint32_t> &_warmup_flow_idx_seq, const runtime_config_t *_runtime)
+  worker_config_t(struct rte_mempool *_pool, uint16_t _queue_id, bytes_t _pkt_size, const std::vector<uint64_t> &_flow_idx_seq,
+                  const std::vector<uint64_t> &_warmup_flow_idx_seq, const runtime_config_t *_runtime)
       : ready(false), pool(_pool), queue_id(_queue_id), pkt_size(_pkt_size), flow_idx_seq(_flow_idx_seq),
         warmup_flow_idx_seq(_warmup_flow_idx_seq), runtime(_runtime) {}
 };
@@ -159,15 +159,15 @@ struct rte_mempool *create_mbuf_pool(unsigned lcore_id) {
 }
 
 void wait_to_start() {
-  uint64_t last_cnt = config.runtime.update_cnt;
+  uint64_t last_cnt = runtime_config.update_cnt;
   while (!quit) {
-    if (config.runtime.running && (config.runtime.rate_per_core > 0)) {
+    if (runtime_config.running && (runtime_config.rate_per_core > 0)) {
       break;
     }
-    while ((config.runtime.update_cnt == last_cnt) && !quit) {
+    while ((runtime_config.update_cnt == last_cnt) && !quit) {
       sleep_ms(100);
     }
-    last_cnt = config.runtime.update_cnt;
+    last_cnt = runtime_config.update_cnt;
   }
 }
 
@@ -234,11 +234,7 @@ static void modify_packet(byte_t *pkt, const flow_t &flow, enum kvs_op kvs_op) {
   struct rte_ipv4_hdr *ip_hdr     = (struct rte_ipv4_hdr *)(ether_hdr + 1);
   struct rte_udp_hdr *udp_hdr     = (struct rte_udp_hdr *)(ip_hdr + 1);
 
-  if (config.mark_warmup_packets && config.warmup_active) {
-    ip_hdr->next_proto_id = WARMUP_PROTO_ID;
-  } else {
-    ip_hdr->next_proto_id = IPPROTO_UDP;
-  }
+  ip_hdr->next_proto_id = IPPROTO_UDP;
 
   if (config.kvs_mode) {
     ip_hdr->src_addr  = flow.src_ip;
@@ -370,7 +366,7 @@ static int tx_worker_main(void *arg) {
 
   uint16_t queue_id = worker_config->queue_id;
 
-  uint32_t churn_flow_idx = 0;
+  uint64_t churn_flow_idx = 0;
 
   // Run until the application is killed
   while (likely(!quit)) {
@@ -402,9 +398,10 @@ static int tx_worker_main(void *arg) {
       total_pkt_size += mbuf->pkt_len;
       byte_t *pkt = rte_pktmbuf_mtod(mbuf, byte_t *);
 
-      const uint32_t flow_idx = config.warmup_active ? worker_config->warmup_flow_idx_seq[(flow_idx_counter + i) % warmup_flow_idx_seq_size]
-                                                     : worker_config->flow_idx_seq[(flow_idx_counter + i) % flow_idx_seq_size];
-      ticks_t &flow_timer     = flows_timers[flow_idx];
+      const uint64_t flow_idx   = config.warmup_active
+                                      ? worker_config->warmup_flow_idx_seq.at((flow_idx_counter + i) % warmup_flow_idx_seq_size)
+                                      : worker_config->flow_idx_seq.at((flow_idx_counter + i) % flow_idx_seq_size);
+      ticks_t &flow_timer       = flows_timers[flow_idx];
       size_t &chosen_kvs_op_idx = chosen_kvs_op_idxs[flow_idx];
       enum kvs_op chosen_kvs_op = kvs_ops_per_flow[flow_idx][chosen_kvs_op_idx];
       chosen_kvs_op_idx         = (chosen_kvs_op_idx + 1) % total_kvs_ops_per_flow;
@@ -527,8 +524,8 @@ int main(int argc, char *argv[]) {
   }
 
   generate_flows();
-  const std::vector<std::vector<uint32_t>> flow_idx_seq_per_worker             = generate_flow_idx_sequence_per_worker();
-  const std::vector<std::vector<uint32_t>> warmup_flow_idx_sequence_per_worker = generate_warmup_flow_idx_sequence_per_worker();
+  const std::vector<std::vector<uint64_t>> flow_idx_seq_per_worker             = generate_flow_idx_sequence_per_worker();
+  const std::vector<std::vector<uint64_t>> warmup_flow_idx_sequence_per_worker = generate_warmup_flow_idx_sequence_per_worker();
 
   if (config.dump_flows_to_file) {
     dump_flows_to_file();
@@ -537,13 +534,13 @@ int main(int argc, char *argv[]) {
   std::vector<std::unique_ptr<worker_config_t>> workers_configs(config.tx.num_cores);
 
   for (uint16_t i = 0; i < config.tx.num_cores; i++) {
-    const std::vector<uint32_t> &flow_idx_seq        = flow_idx_seq_per_worker.at(i);
-    const std::vector<uint32_t> &warmup_flow_idx_seq = warmup_flow_idx_sequence_per_worker.at(i);
+    const std::vector<uint64_t> &flow_idx_seq        = flow_idx_seq_per_worker.at(i);
+    const std::vector<uint64_t> &warmup_flow_idx_seq = warmup_flow_idx_sequence_per_worker.at(i);
     const uint16_t lcore_id                          = config.tx.cores[i];
     const uint16_t queue_id                          = i;
 
     workers_configs[i] =
-        std::make_unique<worker_config_t>(mbufs_pools[i], queue_id, config.pkt_size, flow_idx_seq, warmup_flow_idx_seq, &config.runtime);
+        std::make_unique<worker_config_t>(mbufs_pools[i], queue_id, config.pkt_size, flow_idx_seq, warmup_flow_idx_seq, &runtime_config);
     rte_eal_remote_launch(tx_worker_main, static_cast<void *>(workers_configs[i].get()), lcore_id);
   }
 

@@ -12,10 +12,10 @@
 // From Castan [SIGCOMM'18]
 // Source:
 // https://github.com/nal-epfl/castan/blob/master/scripts/pcap_tools/create_zipfian_distribution_pcap.py
-inline uint64_t zipf_random_number_generator(uint32_t total_flows, double zipf_param) {
+inline uint64_t zipf_random_number_generator(uint64_t total_flows, double zipf_param) {
   assert(zipf_param != 1.0 && "Invalid zipf_param");
 
-  const double probability = rte_drand();
+  const double probability = (double)rte_rand() / (double)UINT64_MAX;
   assert(probability >= 0 && probability <= 1 && "Invalid probability");
 
   const double p         = probability;
@@ -46,16 +46,16 @@ inline uint64_t zipf_random_number_generator(uint32_t total_flows, double zipf_p
   }
 }
 
-inline std::vector<uint32_t> generate_uniform_flow_idx_sequence(uint32_t num_flows) {
-  std::vector<uint32_t> flow_idx_sequence(num_flows);
+inline std::vector<uint64_t> generate_uniform_flow_idx_sequence(uint64_t n) {
+  std::vector<uint64_t> flow_idx_sequence(n);
 
   int progress      = 0;
   int last_progress = 0;
 
-  for (uint32_t i = 0; i < num_flows; i++) {
+  for (uint64_t i = 0; i < n; i++) {
     flow_idx_sequence[i] = i;
 
-    progress = 100 * (i + 1) / num_flows;
+    progress = 100 * (i + 1) / n;
     if (progress != last_progress) {
       last_progress = progress;
       LOG_REWRITE("Generating uniform distribution: %d%%", progress);
@@ -67,9 +67,9 @@ inline std::vector<uint32_t> generate_uniform_flow_idx_sequence(uint32_t num_flo
   return flow_idx_sequence;
 }
 
-inline std::vector<uint32_t> generate_zipf_flow_idx_sequence(uint32_t num_flows, double zipf_param) {
-  std::unordered_set<uint32_t> used_flow_idxs;
-  std::vector<uint32_t> flow_idx_sequence;
+inline std::vector<uint64_t> generate_zipf_flow_idx_sequence(uint64_t n, double zipf_param) {
+  std::unordered_set<uint64_t> used_flow_idxs;
+  std::vector<uint64_t> flow_idx_sequence;
 
   if (zipf_param == 0 || zipf_param == 1) {
     const double epsilon = 1e-6;
@@ -80,26 +80,26 @@ inline std::vector<uint32_t> generate_zipf_flow_idx_sequence(uint32_t num_flows,
   int progress      = 0;
   int last_progress = 0;
 
-  while (used_flow_idxs.size() < num_flows) {
-    const uint32_t flow_idx = zipf_random_number_generator(num_flows, zipf_param);
+  while (used_flow_idxs.size() < n) {
+    const uint64_t flow_idx = zipf_random_number_generator(n, zipf_param);
     used_flow_idxs.insert(flow_idx);
     flow_idx_sequence.push_back(flow_idx);
 
-    progress = 100 * used_flow_idxs.size() / num_flows;
+    progress = 100 * used_flow_idxs.size() / n;
     if (progress != last_progress) {
       last_progress = progress;
       LOG_REWRITE("Generating zipfian distribution: %d%%", progress);
     }
 
-    if (flow_idx_sequence.size() >= 1000 * num_flows) {
+    if (flow_idx_sequence.size() >= 1000 * n) {
       break;
     }
   }
 
   LOG();
-  if (used_flow_idxs.size() != num_flows) {
+  if (used_flow_idxs.size() != n) {
     LOG("WARNING: Zipfian distribution is taking too long to generate. Using just %lu flows (%.2f%%).", used_flow_idxs.size(),
-        100.0 * used_flow_idxs.size() / num_flows);
+        100.0 * used_flow_idxs.size() / n);
     return flow_idx_sequence;
   }
 
