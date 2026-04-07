@@ -19,7 +19,6 @@
 std::vector<flow_t> flows;
 std::unordered_map<flow_t, uint64_t, flow_hash_t, flow_comp_t> flow_to_idx;
 std::vector<uint64_t> flow_idx_seq;
-std::vector<uint64_t> warmup_flow_idx_seq;
 uint64_t pcap_packet_counter;
 
 static flow_t generate_random_flow() {
@@ -106,7 +105,7 @@ void randomize_flow(uint64_t flow_idx) {
 
 const std::vector<flow_t> &get_generated_flows() { return flows; }
 
-std::vector<std::vector<uint64_t>> generate_flow_idx_sequence_per_worker() {
+void generate_flow_idx_sequence() {
   if (!config.pcap_fname.empty()) {
     uint64_t local_pcap_packet_counter = 0;
     double last_progress               = 0;
@@ -126,7 +125,7 @@ std::vector<std::vector<uint64_t>> generate_flow_idx_sequence_per_worker() {
       }
     }
 
-    LOG("Finished generating flow index sequence from pcap.");
+    LOG("Finished generating flow index sequence from pcap: %zu entries.", flow_idx_seq.size());
   } else {
     LOG("Generating distribution of flow indexes...");
     switch (config.dist) {
@@ -138,6 +137,18 @@ std::vector<std::vector<uint64_t>> generate_flow_idx_sequence_per_worker() {
       break;
     }
   }
+}
+
+std::vector<std::vector<uint64_t>> generate_flow_idx_sequence_per_worker() {
+  LOG("Generating distribution of flow indexes...");
+  switch (config.dist) {
+  case UNIFORM:
+    flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
+    break;
+  case ZIPF:
+    flow_idx_seq = generate_zipf_flow_idx_sequence(config.num_flows, config.zipf_param);
+    break;
+  }
 
   LOG("Distributing flow indexes per worker...");
   std::vector<std::vector<uint64_t>> flow_idx_seq_per_worker(config.tx.num_cores);
@@ -148,33 +159,7 @@ std::vector<std::vector<uint64_t>> generate_flow_idx_sequence_per_worker() {
     worker_id = (worker_id + 1) % config.tx.num_cores;
   }
 
-  for (uint16_t worker_id = flow_idx_seq.size(); worker_id < config.tx.num_cores; worker_id++) {
-    // HACK: If there are more workers than flows, we assign the same flow indexes to the remaining workers..
-    flow_idx_seq_per_worker[worker_id] = flow_idx_seq_per_worker[0];
-  }
-
-  for (uint16_t worker_id = 0; worker_id < config.tx.num_cores; worker_id++) {
-    LOG("Worker %u: %zu flow indexes", worker_id, flow_idx_seq_per_worker[worker_id].size());
-  }
-
   return flow_idx_seq_per_worker;
-}
-
-std::vector<std::vector<uint64_t>> generate_warmup_flow_idx_sequence_per_worker() {
-  LOG("Generating distribution of warmup flow indexes...");
-  warmup_flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
-  std::reverse(warmup_flow_idx_seq.begin(), warmup_flow_idx_seq.end());
-
-  LOG("Distributing warmup flow indexes per worker...");
-  std::vector<std::vector<uint64_t>> warmup_flow_idx_seq_per_worker(config.tx.num_cores);
-
-  uint16_t worker_id = 0;
-  for (size_t i = 0; i < warmup_flow_idx_seq.size(); i++) {
-    warmup_flow_idx_seq_per_worker[worker_id].push_back(warmup_flow_idx_seq[i]);
-    worker_id = (worker_id + 1) % config.tx.num_cores;
-  }
-
-  return warmup_flow_idx_seq_per_worker;
 }
 
 std::string flow_to_string(const flow_t &flow) {

@@ -18,10 +18,7 @@ struct config_t {
   bytes_t pkt_size;
   std::string pcap_fname;
 
-  time_s_t warmup_duration;
-  rate_mbps_t warmup_rate;
-  bool warmup_active;
-  bool mark_warmup_packets;
+  bool sync_cores;
   bool kvs_mode;
   double kvs_get_ratio;
 

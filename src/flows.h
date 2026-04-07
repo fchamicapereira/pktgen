@@ -52,13 +52,12 @@ struct flow_comp_t {
 
 extern std::vector<flow_t> flows;
 extern std::vector<uint64_t> flow_idx_seq;
-extern std::vector<uint64_t> warmup_flow_idx_seq;
 
 std::string flow_to_string(const flow_t &flow);
 void generate_flows();
 const std::vector<flow_t> &get_generated_flows();
+void generate_flow_idx_sequence();
 std::vector<std::vector<uint64_t>> generate_flow_idx_sequence_per_worker();
-std::vector<std::vector<uint64_t>> generate_warmup_flow_idx_sequence_per_worker();
 void randomize_flow(uint64_t flow_idx);
 
 void generate_unique_flows_per_worker();

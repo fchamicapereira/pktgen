@@ -69,7 +69,6 @@ INIT_PARAMETERLESS_COMMAND(cmd_dist_token_cmd, cmd, "dist");
 INIT_INT_COMMAND(cmd_rate_token_cmd, cmd, "rate")
 INIT_INT_COMMAND(cmd_churn_token_cmd, cmd, "churn")
 INIT_INT_COMMAND(cmd_run_token_cmd, cmd, "run")
-INIT_INT_COMMAND(cmd_warmup_token_cmd, cmd, "warmup")
 
 cmdline_parse_token_num_t cmd_int_token_param = TOKEN_NUM_INITIALIZER(struct cmd_int_params, param, RTE_UINT32);
 
@@ -112,30 +111,10 @@ void cmd_churn(churn_fpm_t churn) {
   signal_new_config();
 }
 
-void cmd_activate_warmup() {
-  config.warmup_active = true;
-  signal_new_config();
-}
-
-void cmd_deactivate_warmup() {
-  config.warmup_active = false;
-  signal_new_config();
-}
-
 void cmd_run(time_s_t duration) {
   signal_new_config();
 
-  rate_gbps_t rate = config.rate;
-
-  cmd_rate(config.warmup_rate);
-  cmd_activate_warmup();
-
   cmd_start();
-  sleep_s(config.warmup_duration);
-
-  cmd_deactivate_warmup();
-
-  cmd_rate(rate);
   cmd_stats_reset();
 
   sleep_s(duration);
@@ -191,11 +170,6 @@ void cmd_bench() {
   LOG("\tRate %.0lf Mbps (%.0lf Mpps)", actual_rate_bps, actual_rate_pps);
 }
 
-void cmd_warmup(time_s_t time) {
-  signal_new_config();
-
-  config.warmup_duration = time;
-}
 
 static void cmd_quit_callback(__rte_unused void *ptr_params, struct cmdline *ctx, __rte_unused void *ptr_data) { cmdline_quit(ctx); }
 
@@ -243,15 +217,6 @@ static void cmd_run_callback(__rte_unused void *ptr_params, __rte_unused struct 
   cmd_run(time);
 }
 
-static void cmd_toggle_warmup_callback(__rte_unused void *ptr_params, __rte_unused struct cmdline *ctx, __rte_unused void *ptr_data) {
-  struct cmd_int_params *params = (struct cmd_int_params *)ptr_params;
-  bool active                   = params->param != 0;
-  if (active) {
-    cmd_activate_warmup();
-  } else {
-    cmd_deactivate_warmup();
-  }
-}
 
 CMDLINE_PARSE_INT_NTOKENS(1)
 cmd_quit_cmd = {
@@ -341,13 +306,6 @@ cmd_run_cmd = {
     .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_run_token_cmd, (cmdline_parse_token_hdr_t *)&cmd_int_token_param, NULL},
 };
 
-CMDLINE_PARSE_INT_NTOKENS(2)
-cmd_toggle_warmup_cmd = {
-    .f        = cmd_toggle_warmup_callback,
-    .data     = NULL,
-    .help_str = "warmup <state>\n     Toggle warmup state (0=off, other=on)",
-    .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_warmup_token_cmd, (cmdline_parse_token_hdr_t *)&cmd_int_token_param, NULL},
-};
 
 cmdline_parse_ctx_t list_prompt_commands[] = {
     (cmdline_parse_inst_t *)&cmd_quit_cmd,
@@ -360,7 +318,6 @@ cmdline_parse_ctx_t list_prompt_commands[] = {
     (cmdline_parse_inst_t *)&cmd_rate_cmd,
     (cmdline_parse_inst_t *)&cmd_churn_cmd,
     (cmdline_parse_inst_t *)&cmd_run_cmd,
-    (cmdline_parse_inst_t *)&cmd_toggle_warmup_cmd,
     (cmdline_parse_inst_t *)&cmd_bench_cmd,
     NULL,
 };

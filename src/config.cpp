@@ -28,10 +28,7 @@ void config_init(int argc, char **argv) {
   config.zipf_param          = DEFAULT_ZIPF_PARAM;
   config.force_unique_flows  = false;
   config.pkt_size            = DEFAULT_PKT_SIZE;
-  config.warmup_duration     = 0;
-  config.warmup_rate         = 1;
-  config.warmup_active       = false;
-  config.mark_warmup_packets = false;
+  config.sync_cores          = false;
   config.dump_flows_to_file  = false;
   config.kvs_mode            = false;
   config.kvs_get_ratio       = DEFAULT_KVS_GET_RATIO;
@@ -75,7 +72,7 @@ void config_init(int argc, char **argv) {
   app.add_option("--tx-cores", num_tx_cores, "Number of TX cores")->default_val(config.tx.num_cores)->check(CLI::PositiveNumber);
   app.add_flag("--unique-flows", config.force_unique_flows, "Flows are unique");
   app.add_option("--seed", config.seed, "Random seed");
-  app.add_flag("--mark-warmup-packets", config.mark_warmup_packets, "Mark warmup packets with a custom transport protocol (0x92)");
+  app.add_flag("--sync-cores", config.sync_cores, "Synchronize cores to replay the pcap in order across all cores");
   app.add_flag("--dump-flows-to-file", config.dump_flows_to_file, "Dump flows to pcap file");
   app.add_flag("--kvs-mode", config.kvs_mode, "Enable KVS mode");
   app.add_option("--kvs-get-ratio", config.kvs_get_ratio, "KVS get ratio")->default_val(DEFAULT_KVS_GET_RATIO)->check(CLI::Range(0.0, 1.0));
@@ -144,7 +141,7 @@ void config_print() {
   LOG("Zipf param:       %lf", config.zipf_param);
   LOG("Unique flows:     %s", config.force_unique_flows ? "true" : "false");
   LOG("Packet size:      %" PRIu64 " bytes", config.pkt_size);
-  LOG("Mark warmup pkts: %s", config.mark_warmup_packets ? "true" : "false");
+  LOG("Sync cores:       %s", config.sync_cores ? "true" : "false");
   LOG("Dump flows:       %s", config.dump_flows_to_file ? "true" : "false");
   LOG("KVS mode:         %s", config.kvs_mode ? "true" : "false");
   LOG("KVS get ratio:    %lf", config.kvs_get_ratio);
