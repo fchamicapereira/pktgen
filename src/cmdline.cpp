@@ -135,7 +135,7 @@ void cmd_bench() {
       .tx_bytes = 0,
   };
 
-  LOG("Warming up with rate %.0lf Mbps for %u seconds...", BIN_SEARCH_WARMUP_RATE_Mbps, BIN_SEARCH_WARMUP_DURATION_S);
+  LOG("Warming up with rate %u Mbps for %u seconds...", BIN_SEARCH_WARMUP_RATE_Mbps, BIN_SEARCH_WARMUP_DURATION_S);
   cmd_rate(BIN_SEARCH_WARMUP_RATE_Mbps / 1e3);
   cmd_start();
   sleep_s(BIN_SEARCH_WARMUP_DURATION_S);
