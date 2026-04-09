@@ -21,10 +21,12 @@
 
 #include <unordered_map>
 
+#define BIN_SEARCH_WARMUP_RATE_Mbps 1000 /* 1 Gbps */
 #define BIN_SEARCH_IT_STEPS 10
 #define BIN_SEARCH_MIN_RATE_Mbps 1      /* 1 Mbps */
 #define BIN_SEARCH_MAX_RATE_Mbps 100000 /* 100 Gbps */
 #define BIN_SEARCH_IT_DURATION_S 10
+#define BIN_SEARCH_WARMUP_DURATION_S 5
 #define BIN_SEARCH_LOSS_THRESHOLD 0.001 /* 0.1% */
 
 struct runtime_config_t runtime_config;
@@ -133,6 +135,11 @@ void cmd_bench() {
       .tx_bytes = 0,
   };
 
+  LOG("Warming up with rate %.0lf Mbps for %u seconds...", BIN_SEARCH_WARMUP_RATE_Mbps, BIN_SEARCH_WARMUP_DURATION_S);
+  cmd_rate(BIN_SEARCH_WARMUP_RATE_Mbps / 1e3);
+  cmd_start();
+  sleep_s(BIN_SEARCH_WARMUP_DURATION_S);
+
   for (int i = 0; i < BIN_SEARCH_IT_STEPS; i++) {
     LOG("Testing rate %.0lf Mbps...", rate);
 
@@ -169,7 +176,6 @@ void cmd_bench() {
   LOG("\tRX %" PRIu64 " pkts %" PRIu64 " bytes", stable_stats.rx_pkts, stable_stats.rx_bytes);
   LOG("\tRate %.0lf Mbps (%.0lf Mpps)", actual_rate_bps, actual_rate_pps);
 }
-
 
 static void cmd_quit_callback(__rte_unused void *ptr_params, struct cmdline *ctx, __rte_unused void *ptr_data) { cmdline_quit(ctx); }
 
@@ -216,7 +222,6 @@ static void cmd_run_callback(__rte_unused void *ptr_params, __rte_unused struct 
   time_s_t time                 = (double)params->param;
   cmd_run(time);
 }
-
 
 CMDLINE_PARSE_INT_NTOKENS(1)
 cmd_quit_cmd = {
@@ -306,20 +311,11 @@ cmd_run_cmd = {
     .tokens   = {(cmdline_parse_token_hdr_t *)&cmd_run_token_cmd, (cmdline_parse_token_hdr_t *)&cmd_int_token_param, NULL},
 };
 
-
 cmdline_parse_ctx_t list_prompt_commands[] = {
-    (cmdline_parse_inst_t *)&cmd_quit_cmd,
-    (cmdline_parse_inst_t *)&cmd_start_cmd,
-    (cmdline_parse_inst_t *)&cmd_stop_cmd,
-    (cmdline_parse_inst_t *)&cmd_stats_cmd,
-    (cmdline_parse_inst_t *)&cmd_stats_reset_cmd,
-    (cmdline_parse_inst_t *)&cmd_flows_cmd,
-    (cmdline_parse_inst_t *)&cmd_dist_cmd,
-    (cmdline_parse_inst_t *)&cmd_rate_cmd,
-    (cmdline_parse_inst_t *)&cmd_churn_cmd,
-    (cmdline_parse_inst_t *)&cmd_run_cmd,
-    (cmdline_parse_inst_t *)&cmd_bench_cmd,
-    NULL,
+    (cmdline_parse_inst_t *)&cmd_quit_cmd,  (cmdline_parse_inst_t *)&cmd_start_cmd,       (cmdline_parse_inst_t *)&cmd_stop_cmd,
+    (cmdline_parse_inst_t *)&cmd_stats_cmd, (cmdline_parse_inst_t *)&cmd_stats_reset_cmd, (cmdline_parse_inst_t *)&cmd_flows_cmd,
+    (cmdline_parse_inst_t *)&cmd_dist_cmd,  (cmdline_parse_inst_t *)&cmd_rate_cmd,        (cmdline_parse_inst_t *)&cmd_churn_cmd,
+    (cmdline_parse_inst_t *)&cmd_run_cmd,   (cmdline_parse_inst_t *)&cmd_bench_cmd,       NULL,
 };
 
 void cmdline_start() {

@@ -19,7 +19,6 @@
 std::vector<flow_t> flows;
 std::unordered_map<flow_t, uint64_t, flow_hash_t, flow_comp_t> flow_to_idx;
 std::vector<uint64_t> flow_idx_seq;
-uint64_t pcap_packet_counter;
 
 static flow_t generate_random_flow() {
   flow_t flow;
@@ -45,27 +44,27 @@ void generate_flows() {
   if (!config.pcap_fname.empty()) {
     LOG("PCAP file specified, reading from pcap");
 
-    pcap_packet_counter = 0;
-
+    uint64_t pkt_counter = 0;
     pcap_reader_t reader(config.pcap_fname);
     packet_t packet;
     while (reader.read_next_packet(packet)) {
-      pcap_packet_counter++;
-      if (pcap_packet_counter % 10000 == 0) {
-        LOG_REWRITE("Reading pcap file: %lu packets read, %zu unique flows found", pcap_packet_counter, flows.size());
+      pkt_counter++;
+      if (pkt_counter % 10000 == 0) {
+        LOG_REWRITE("Reading pcap file: %lu packets, %zu unique flows", pkt_counter, flows.size());
       }
 
       if (packet.flow.has_value()) {
-        if (flows_set.find(packet.flow.value()) != flows_set.end()) {
-          continue;
+        const flow_t &flow = packet.flow.value();
+        if (flows_set.find(flow) == flows_set.end()) {
+          flow_to_idx[flow] = flows.size();
+          flows.push_back(flow);
+          flows_set.insert(flow);
         }
-
-        flow_to_idx[packet.flow.value()] = flows.size();
-        flows.push_back(packet.flow.value());
-        flows_set.insert(packet.flow.value());
+        flow_idx_seq.push_back(flow_to_idx[flow]);
       }
     }
-    LOG("Finished reading pcap file: %lu packets read, %zu unique flows found", pcap_packet_counter, flows.size());
+    LOG("Finished reading pcap file: %lu packets, %zu unique flows, %zu index entries.",
+        pkt_counter, flows.size(), flow_idx_seq.size());
 
     return;
   }
@@ -107,35 +106,18 @@ const std::vector<flow_t> &get_generated_flows() { return flows; }
 
 void generate_flow_idx_sequence() {
   if (!config.pcap_fname.empty()) {
-    uint64_t local_pcap_packet_counter = 0;
-    double last_progress               = 0;
-    pcap_reader_t reader(config.pcap_fname);
-    packet_t packet;
-    while (reader.read_next_packet(packet)) {
-      local_pcap_packet_counter++;
+    // Already populated during generate_flows().
+    return;
+  }
 
-      double progress = 100.0 * local_pcap_packet_counter / pcap_packet_counter;
-      if (progress - last_progress >= 1.0) {
-        last_progress = progress;
-        LOG_REWRITE("Generating flow index sequence from pcap: %.0f%%", progress);
-      }
-
-      if (packet.flow.has_value()) {
-        flow_idx_seq.push_back(flow_to_idx[packet.flow.value()]);
-      }
-    }
-
-    LOG("Finished generating flow index sequence from pcap: %zu entries.", flow_idx_seq.size());
-  } else {
-    LOG("Generating distribution of flow indexes...");
-    switch (config.dist) {
-    case UNIFORM:
-      flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
-      break;
-    case ZIPF:
-      flow_idx_seq = generate_zipf_flow_idx_sequence(config.num_flows, config.zipf_param);
-      break;
-    }
+  LOG("Generating distribution of flow indexes...");
+  switch (config.dist) {
+  case UNIFORM:
+    flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
+    break;
+  case ZIPF:
+    flow_idx_seq = generate_zipf_flow_idx_sequence(config.num_flows, config.zipf_param);
+    break;
   }
 }
 
