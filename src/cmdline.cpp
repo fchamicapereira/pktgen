@@ -144,16 +144,17 @@ void cmd_bench() {
     LOG("Testing rate %.0lf Mbps...", rate);
 
     cmd_rate(rate / 1e3);
+    sleep_s(2); // Let the rate stabilize before measuring
     cmd_stats_reset();
-    cmd_start();
     sleep_s(BIN_SEARCH_IT_DURATION_S);
-    cmd_stop();
-    sleep_s(1);
 
     struct stats_t stats = get_stats();
 
-    double loss = (double)(stats.tx_pkts - stats.rx_pkts) / stats.tx_pkts;
-    LOG("TX %" PRIu64 " RX %" PRIu64 " loss %.4f%%", stats.tx_pkts, stats.rx_pkts, 100 * loss);
+    double loss                  = (double)(stats.tx_pkts - stats.rx_pkts) / stats.tx_pkts;
+    rate_mbps_t actual_rate_mbps = stats.tx_bytes * 8.0 / (BIN_SEARCH_IT_DURATION_S * 1e6);
+    rate_mpps_t actual_rate_mpps = stats.tx_pkts / (BIN_SEARCH_IT_DURATION_S * 1e6);
+    LOG("TX %12" PRIu64 " RX %12" PRIu64 " Rate %6.0lf Mbps %4.0lf Mpps loss %9.4f%%", stats.tx_pkts, stats.rx_pkts, actual_rate_mbps,
+        actual_rate_mpps, 100 * loss);
 
     if (loss < BIN_SEARCH_LOSS_THRESHOLD) {
       low          = rate;
@@ -167,6 +168,8 @@ void cmd_bench() {
 
     rate = (low + high) / 2;
   }
+
+  cmd_stop();
 
   rate_mbps_t actual_rate_mbps = stable_stats.tx_bytes * 8.0 / (BIN_SEARCH_IT_DURATION_S * 1e6);
   rate_mpps_t actual_rate_mpps = stable_stats.tx_pkts / (BIN_SEARCH_IT_DURATION_S * 1e6);

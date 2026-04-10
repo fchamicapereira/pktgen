@@ -2,6 +2,7 @@
 
 #include "types.h"
 
+#include <optional>
 #include <string>
 #include <rte_lcore.h>
 #include <pcap.h>
@@ -17,6 +18,7 @@ struct config_t {
   bool force_unique_flows;
   bytes_t pkt_size;
   std::string pcap_fname;
+  std::optional<uint32_t> logical_batch_size;
 
   bool sync_cores;
   bool kvs_mode;

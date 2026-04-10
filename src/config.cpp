@@ -82,17 +82,23 @@ void config_init(int argc, char **argv) {
   app.add_option("--zipf-param", config.zipf_param, "Zipf parameter")->default_val(DEFAULT_ZIPF_PARAM)->check(CLI::NonNegativeNumber);
   app.add_option("--pcap", config.pcap_fname, "Pcap file to replay");
 
+  uint32_t logical_batch_size = 0;
+  CLI::Option *logical_batch_size_opt =
+      app.add_option("--logical-batch-size", logical_batch_size, "Sort flow index sequence in batches of this size")
+          ->check(CLI::PositiveNumber);
+
   try {
     app.parse(argc, argv);
   } catch (const CLI::ParseError &e) {
     exit(app.exit(e));
   }
 
-  config.pkt_size     = pkt_size;
-  config.tx.port      = (uint16_t)tx_port;
-  config.rx.port      = (uint16_t)rx_port;
-  config.tx.num_cores = (uint16_t)num_tx_cores;
-  config.dist         = (dist_str == "zipf") ? ZIPF : UNIFORM;
+  config.pkt_size           = pkt_size;
+  config.tx.port            = (uint16_t)tx_port;
+  config.rx.port            = (uint16_t)rx_port;
+  config.tx.num_cores       = (uint16_t)num_tx_cores;
+  config.dist               = (dist_str == "zipf") ? ZIPF : UNIFORM;
+  config.logical_batch_size = logical_batch_size_opt->count() > 0 ? std::optional<uint32_t>{logical_batch_size} : std::nullopt;
 
   if (tx_port >= nb_devices) {
     rte_exit(EXIT_FAILURE, "Invalid TX device: requested %u but only %u available.\n", tx_port, nb_devices);
@@ -139,6 +145,11 @@ void config_print() {
   LOG("Packet size:      %" PRIu64 " bytes", config.pkt_size);
   LOG("Dump flows:       %s", config.dump_flows_to_file ? "true" : "false");
   LOG("Sync cores:       %s", config.sync_cores ? "true" : "false");
+  if (config.logical_batch_size.has_value()) {
+    LOG("Logical batch:    %" PRIu32, config.logical_batch_size.value());
+  } else {
+    LOG("Logical batch:    disabled");
+  }
 
   if (config.pcap_fname.empty()) {
     LOG("Flows:            %" PRIu32, config.num_flows);

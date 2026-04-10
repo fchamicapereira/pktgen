@@ -3,6 +3,7 @@
 #include <rte_common.h>
 #include <rte_random.h>
 
+#include <iostream>
 #include <sstream>
 #include <unordered_set>
 #include <vector>
@@ -63,8 +64,7 @@ void generate_flows() {
         flow_idx_seq.push_back(flow_to_idx[flow]);
       }
     }
-    LOG("Finished reading pcap file: %lu packets, %zu unique flows, %zu index entries.",
-        pkt_counter, flows.size(), flow_idx_seq.size());
+    LOG("Finished reading pcap file: %lu packets, %zu unique flows, %zu index entries.", pkt_counter, flows.size(), flow_idx_seq.size());
 
     return;
   }
@@ -105,40 +105,37 @@ void randomize_flow(uint64_t flow_idx) {
 const std::vector<flow_t> &get_generated_flows() { return flows; }
 
 void generate_flow_idx_sequence() {
-  if (!config.pcap_fname.empty()) {
-    // Already populated during generate_flows().
-    return;
+  // Already populated during generate_flows() when reading from a PCAP file.
+  if (config.pcap_fname.empty()) {
+    LOG("Generating distribution of flow indexes...");
+    switch (config.dist) {
+    case UNIFORM:
+      flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
+      break;
+    case ZIPF:
+      flow_idx_seq = generate_zipf_flow_idx_sequence(config.num_flows, config.zipf_param);
+      break;
+    }
   }
 
-  LOG("Generating distribution of flow indexes...");
-  switch (config.dist) {
-  case UNIFORM:
-    flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
-    break;
-  case ZIPF:
-    flow_idx_seq = generate_zipf_flow_idx_sequence(config.num_flows, config.zipf_param);
-    break;
+  if (config.logical_batch_size.has_value()) {
+    const size_t logical_batch_size = config.logical_batch_size.value();
+    LOG("Sorting flow index sequence in logical batches of %zu...", logical_batch_size);
+    for (size_t i = 0; i < flow_idx_seq.size(); i += logical_batch_size) {
+      size_t current_batch_size = std::min(logical_batch_size, flow_idx_seq.size() - i);
+      std::sort(flow_idx_seq.begin() + i, flow_idx_seq.begin() + i + current_batch_size);
+    }
   }
 }
 
 std::vector<std::vector<uint64_t>> generate_flow_idx_sequence_per_worker() {
-  LOG("Generating distribution of flow indexes...");
-  switch (config.dist) {
-  case UNIFORM:
-    flow_idx_seq = generate_uniform_flow_idx_sequence(config.num_flows);
-    break;
-  case ZIPF:
-    flow_idx_seq = generate_zipf_flow_idx_sequence(config.num_flows, config.zipf_param);
-    break;
-  }
-
   LOG("Distributing flow indexes per worker...");
   std::vector<std::vector<uint64_t>> flow_idx_seq_per_worker(config.tx.num_cores);
 
   // Distribute round-robin, repeating the sequence if there are fewer flows
   // than workers to ensure every worker gets at least one entry.
   size_t total_entries = std::max(flow_idx_seq.size(), (size_t)config.tx.num_cores);
-  uint16_t worker_id  = 0;
+  uint16_t worker_id   = 0;
   for (size_t i = 0; i < total_entries; i++) {
     flow_idx_seq_per_worker[worker_id].push_back(flow_idx_seq[i % flow_idx_seq.size()]);
     worker_id = (worker_id + 1) % config.tx.num_cores;

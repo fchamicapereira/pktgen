@@ -529,9 +529,7 @@ int main(int argc, char *argv[]) {
     dump_flows_to_file();
   }
 
-  if (config.sync_cores) {
-    generate_flow_idx_sequence();
-  }
+  generate_flow_idx_sequence();
 
   const std::vector<std::vector<uint64_t>> flow_idx_seq_per_worker =
       config.sync_cores ? std::vector<std::vector<uint64_t>>{} : generate_flow_idx_sequence_per_worker();
