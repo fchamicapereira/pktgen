@@ -135,9 +135,12 @@ std::vector<std::vector<uint64_t>> generate_flow_idx_sequence_per_worker() {
   LOG("Distributing flow indexes per worker...");
   std::vector<std::vector<uint64_t>> flow_idx_seq_per_worker(config.tx.num_cores);
 
-  uint16_t worker_id = 0;
-  for (size_t i = 0; i < flow_idx_seq.size(); i++) {
-    flow_idx_seq_per_worker[worker_id].push_back(flow_idx_seq[i]);
+  // Distribute round-robin, repeating the sequence if there are fewer flows
+  // than workers to ensure every worker gets at least one entry.
+  size_t total_entries = std::max(flow_idx_seq.size(), (size_t)config.tx.num_cores);
+  uint16_t worker_id  = 0;
+  for (size_t i = 0; i < total_entries; i++) {
+    flow_idx_seq_per_worker[worker_id].push_back(flow_idx_seq[i % flow_idx_seq.size()]);
     worker_id = (worker_id + 1) % config.tx.num_cores;
   }
 

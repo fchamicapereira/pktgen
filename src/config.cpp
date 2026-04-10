@@ -21,20 +21,20 @@ struct config_t config;
 #define DEFAULT_KVS_GET_RATIO 0.0
 
 void config_init(int argc, char **argv) {
-  config.seed                = (uint64_t)time(NULL);
-  config.test_and_exit       = false;
-  config.num_flows           = DEFAULT_TOTAL_FLOWS;
-  config.dist                = UNIFORM;
-  config.zipf_param          = DEFAULT_ZIPF_PARAM;
-  config.force_unique_flows  = false;
-  config.pkt_size            = DEFAULT_PKT_SIZE;
-  config.sync_cores          = false;
-  config.dump_flows_to_file  = false;
-  config.kvs_mode            = false;
-  config.kvs_get_ratio       = DEFAULT_KVS_GET_RATIO;
-  config.rx.port             = 0;
-  config.tx.port             = 1;
-  config.tx.num_cores        = 1;
+  config.seed               = (uint64_t)time(NULL);
+  config.test_and_exit      = false;
+  config.num_flows          = DEFAULT_TOTAL_FLOWS;
+  config.dist               = UNIFORM;
+  config.zipf_param         = DEFAULT_ZIPF_PARAM;
+  config.force_unique_flows = false;
+  config.pkt_size           = DEFAULT_PKT_SIZE;
+  config.sync_cores         = false;
+  config.dump_flows_to_file = false;
+  config.kvs_mode           = false;
+  config.kvs_get_ratio      = DEFAULT_KVS_GET_RATIO;
+  config.rx.port            = 0;
+  config.tx.port            = 1;
+  config.tx.num_cores       = 1;
 
   runtime_config.running       = false;
   runtime_config.update_cnt    = 0;
@@ -136,14 +136,20 @@ void config_print() {
   LOG("TX port:          %" PRIu16, config.tx.port);
   LOG("TX cores:         %" PRIu16, config.tx.num_cores);
   LOG("Random seed:      %" PRIu64, config.seed);
-  LOG("Flows:            %" PRIu32, config.num_flows);
-  LOG("Traffic dist:     %s", traffic_dist_str);
-  LOG("Zipf param:       %lf", config.zipf_param);
-  LOG("Unique flows:     %s", config.force_unique_flows ? "true" : "false");
   LOG("Packet size:      %" PRIu64 " bytes", config.pkt_size);
-  LOG("Sync cores:       %s", config.sync_cores ? "true" : "false");
   LOG("Dump flows:       %s", config.dump_flows_to_file ? "true" : "false");
-  LOG("KVS mode:         %s", config.kvs_mode ? "true" : "false");
-  LOG("KVS get ratio:    %lf", config.kvs_get_ratio);
+  LOG("Sync cores:       %s", config.sync_cores ? "true" : "false");
+
+  if (config.pcap_fname.empty()) {
+    LOG("Flows:            %" PRIu32, config.num_flows);
+    LOG("Traffic dist:     %s", traffic_dist_str);
+    LOG("Zipf param:       %lf", config.zipf_param);
+    LOG("Unique flows:     %s", config.force_unique_flows ? "true" : "false");
+    LOG("KVS mode:         %s", config.kvs_mode ? "true" : "false");
+    LOG("KVS get ratio:    %lf", config.kvs_get_ratio);
+  } else {
+    LOG("Pcap file:        %s", config.pcap_fname.c_str());
+  }
+
   LOG("------------------\n");
 }

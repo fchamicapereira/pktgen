@@ -168,13 +168,17 @@ void cmd_bench() {
     rate = (low + high) / 2;
   }
 
-  rate_mbps_t actual_rate_bps = stable_stats.tx_bytes * 8.0 / (BIN_SEARCH_IT_DURATION_S * 1e6);
-  rate_mpps_t actual_rate_pps = stable_stats.tx_pkts / (BIN_SEARCH_IT_DURATION_S * 1e6);
+  rate_mbps_t actual_rate_mbps = stable_stats.tx_bytes * 8.0 / (BIN_SEARCH_IT_DURATION_S * 1e6);
+  rate_mpps_t actual_rate_mpps = stable_stats.tx_pkts / (BIN_SEARCH_IT_DURATION_S * 1e6);
 
   LOG("Stable report:");
   LOG("\tTX %" PRIu64 " pkts %" PRIu64 " bytes", stable_stats.tx_pkts, stable_stats.tx_bytes);
   LOG("\tRX %" PRIu64 " pkts %" PRIu64 " bytes", stable_stats.rx_pkts, stable_stats.rx_bytes);
-  LOG("\tRate %.0lf Mbps (%.0lf Mpps)", actual_rate_bps, actual_rate_pps);
+  if (actual_rate_mpps < 1) {
+    LOG("\tRate %.0lf Mbps (%.0lf kpps)", actual_rate_mbps, actual_rate_mpps * 1000);
+  } else {
+    LOG("\tRate %.0lf Mbps (%.0lf Mpps)", actual_rate_mbps, actual_rate_mpps);
+  }
 }
 
 static void cmd_quit_callback(__rte_unused void *ptr_params, struct cmdline *ctx, __rte_unused void *ptr_data) { cmdline_quit(ctx); }
