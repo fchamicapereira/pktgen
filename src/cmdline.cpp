@@ -177,7 +177,7 @@ void cmd_bench() {
   LOG("Stable report:");
   LOG("\tTX %" PRIu64 " pkts %" PRIu64 " bytes", stable_stats.tx_pkts, stable_stats.tx_bytes);
   LOG("\tRX %" PRIu64 " pkts %" PRIu64 " bytes", stable_stats.rx_pkts, stable_stats.rx_bytes);
-  LOG("\tElapsed %ds", BIN_SEARCH_IT_DURATION_S);
+  LOG("\tElapsed %d seconds", BIN_SEARCH_IT_DURATION_S);
   if (actual_rate_mpps < 1) {
     LOG("\tRate %.0lf Mbps (%.0lf kpps)", actual_rate_mbps, actual_rate_mpps * 1000);
   } else {
