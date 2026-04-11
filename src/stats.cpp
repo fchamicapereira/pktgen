@@ -59,6 +59,9 @@ static uint64_t get_port_xstat(uint16_t port, const char *name) {
 }
 
 stats_t get_stats() {
+  uint64_t tx_pkts  = get_port_xstat(config.tx.port, "tx_good_packets");
+  uint64_t tx_bytes = get_port_xstat(config.tx.port, "tx_good_bytes");
+
   uint64_t rx_good_pkts   = get_port_xstat(config.rx.port, "rx_good_packets");
   uint64_t rx_good_bytes  = get_port_xstat(config.rx.port, "rx_good_bytes");
   uint64_t rx_missed_pkts = get_port_xstat(config.rx.port, "rx_missed_errors");
@@ -67,8 +70,6 @@ stats_t get_stats() {
   // We don't care if we missed them, the fact that we've received them back is good enough.
   uint64_t rx_pkts  = rx_good_pkts + rx_missed_pkts;
   uint64_t rx_bytes = rx_good_bytes + rx_error_bytes;
-  uint64_t tx_pkts  = get_port_xstat(config.tx.port, "tx_good_packets");
-  uint64_t tx_bytes = get_port_xstat(config.tx.port, "tx_good_bytes");
 
   // Reseting stats is not atomic, so there's a chance we detect more packets received that sent.
   // It's not that problematic, but let's take that into consideration.
