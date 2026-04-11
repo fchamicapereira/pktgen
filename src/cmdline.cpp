@@ -153,8 +153,8 @@ void cmd_bench() {
     double loss                  = (double)(stats.tx_pkts - stats.rx_pkts) / stats.tx_pkts;
     rate_mbps_t actual_rate_mbps = stats.tx_bytes * 8.0 / (BIN_SEARCH_IT_DURATION_S * 1e6);
     rate_mpps_t actual_rate_mpps = stats.tx_pkts / (BIN_SEARCH_IT_DURATION_S * 1e6);
-    LOG("TX %12" PRIu64 " RX %12" PRIu64 " Rate %6.0lf Mbps %4.0lf Mpps loss %9.4f%%", stats.tx_pkts, stats.rx_pkts, actual_rate_mbps,
-        actual_rate_mpps, 100 * loss);
+    LOG("TX %12" PRIu64 " RX %12" PRIu64 " Elapsed %ds Rate %6.0lf Mbps %4.0lf Mpps loss %9.4f%%", stats.tx_pkts, stats.rx_pkts,
+        BIN_SEARCH_IT_DURATION_S, actual_rate_mbps, actual_rate_mpps, 100 * loss);
 
     if (loss < BIN_SEARCH_LOSS_THRESHOLD) {
       low          = rate;
